@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">HiMup Field</string>
+    <string name="title_activity_main">HiMup Field</string>
+    <string name="package_name">com.himup.field</string>
+    <string name="custom_url_scheme">com.himup.field</string>
+</resources>
