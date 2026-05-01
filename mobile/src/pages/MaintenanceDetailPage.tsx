@@ -43,7 +43,7 @@ export const MaintenanceDetailPage: React.FC = () => {
     );
   }
 
-  if (isError || !maint || !maint.title) {
+  if (isError || !maint || (!maint.maintenance_type && !maint.title && !maint.id)) {
     return (
       <div style={{ minHeight: '100%', background: W.gray50 }}>
         <div style={{ ...stickyHeader, display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -80,7 +80,7 @@ export const MaintenanceDetailPage: React.FC = () => {
       <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {/* Title + Asset card */}
         <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${W.gray100b}`, padding: 16 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: W.gray900, margin: '0 0 12px 0' }}>{maint.title}</h2>
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: W.gray900, margin: '0 0 12px 0' }}>{maint.maintenance_type || maint.title || 'Maintenance'}</h2>
           {maint.asset && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <Wrench size={14} color={W.orange500} />
@@ -97,7 +97,7 @@ export const MaintenanceDetailPage: React.FC = () => {
           <p style={sectionLabel}>Details</p>
           {[
             { icon: Clock,       label: 'Submitted',      val: maint.created_at ? format(new Date(maint.created_at), 'dd MMM yyyy, HH:mm') : null },
-            { icon: Calendar,    label: 'Scheduled',      val: maint.scheduled_date ? format(new Date(maint.scheduled_date), 'dd MMM yyyy') : null },
+            { icon: Calendar,    label: 'Scheduled',      val: maint.maintenance_date || maint.scheduled_date ? format(new Date(maint.maintenance_date || maint.scheduled_date), 'dd MMM yyyy') : null },
             { icon: DollarSign,  label: 'Cost',           val: maint.cost ? `Rp ${Number(maint.cost).toLocaleString('id-ID')}` : null },
             { icon: Hash,        label: 'Asset Tag',      val: maint.asset?.asset_tag },
           ].filter(i => i.val).map(({ icon: Icon, label, val }) => (

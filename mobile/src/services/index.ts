@@ -43,14 +43,14 @@ export const ticketService = {
   updateStatus: (id: number, status: string) =>
     api.patch(`/tickets/${id}/status`, { status }).then((r) => r.data),
 
-  takeOwnership: (id: number) =>
-    api.post(`/tickets/${id}/take-ownership`).then((r) => r.data),
+  takeOwnership: (id: number, picId: number) =>
+    api.post(`/tickets/${id}/assign`, { pic_id: picId }).then((r) => r.data),
 
   create: (payload: Record<string, unknown>) =>
     api.post('/tickets', payload).then((r) => r.data),
 
-  addComment: (id: number, body: string) =>
-    api.post(`/tickets/${id}/comments`, { body }).then((r) => r.data),
+  addComment: (id: number, content: string) =>
+    api.post(`/tickets/${id}/comments`, { content }).then((r) => r.data),
 
   uploadAttachment: (id: number, file: File) => {
     const form = new FormData();

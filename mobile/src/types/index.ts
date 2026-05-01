@@ -58,10 +58,12 @@ export interface Asset {
 
 export interface AssetMaintenance {
   id: number;
-  title: string;
+  title?: string;
+  maintenance_type?: string;
   description?: string;
-  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  status: 'pending' | 'approved' | 'rejected' | 'completed' | 'scheduled' | 'in_progress' | 'cancelled';
   scheduled_date?: string;
+  maintenance_date?: string;
   completed_date?: string;
   cost?: number;
   asset: Asset;
@@ -71,7 +73,9 @@ export interface AssetMaintenance {
 
 export interface Comment {
   id: number;
-  body: string;
+  body?: string;
+  comment?: string;
+  content?: string;
   user: { id: number; name: string };
   created_at: string;
 }

@@ -92,7 +92,7 @@ export const MaintenancePage: React.FC = () => {
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
-                      <p style={{ fontSize: 13, fontWeight: 600, color: W.gray900, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.4 }}>{item.title}</p>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: W.gray900, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.4 }}>{item.maintenance_type || item.title || 'Maintenance'}</p>
                       <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 20, flexShrink: 0, ...bb }}>{item.status}</span>
                     </div>
                     {item.asset?.name && <p style={{ fontSize: 12, color: W.orange600, marginBottom: 4 }}>{item.asset.name}</p>}

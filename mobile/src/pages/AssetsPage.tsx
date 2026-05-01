@@ -109,8 +109,8 @@ export const AssetsPage: React.FC = () => {
                       </div>
                       <p style={{ fontSize: 13, fontWeight: 500, color: W.gray900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{asset.name}</p>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 3 }}>
-                        {asset.asset_type?.name && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: W.gray500 }}><Hash size={10} />{asset.asset_type.name}</span>}
-                        {asset.branch?.name && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: W.gray500 }}><MapPin size={10} />{asset.branch.name}</span>}
+                        {((asset as any).type || (asset as any).asset_type?.name) && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: W.gray500 }}><Hash size={10} />{(asset as any).type || (asset as any).asset_type?.name}</span>}
+                        {(asset.branch?.name || (asset.branch as any)?.nama_branch) && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: W.gray500 }}><MapPin size={10} />{asset.branch?.name || (asset.branch as any)?.nama_branch}</span>}
                       </div>
                     </div>
                   </div>

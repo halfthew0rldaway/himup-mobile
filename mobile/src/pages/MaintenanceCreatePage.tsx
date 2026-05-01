@@ -28,7 +28,13 @@ export const MaintenanceCreatePage: React.FC = () => {
   });
 
   const mutation = useMutation({
-    mutationFn: () => maintenanceService.create({ title, description, asset_id: Number(assetId), scheduled_date: scheduledDate || undefined }),
+    mutationFn: () => maintenanceService.create({ 
+      maintenance_type: title, 
+      description, 
+      asset_id: Number(assetId), 
+      maintenance_date: scheduledDate || undefined,
+      status: 'scheduled'
+    }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['maintenances'] }); navigate('/maintenance'); },
   });
 
