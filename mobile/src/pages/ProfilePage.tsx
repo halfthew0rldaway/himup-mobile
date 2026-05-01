@@ -83,8 +83,8 @@ export const ProfilePage: React.FC = () => {
         <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${W.gray100b}`, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', padding: 14 }}>
           <p style={{ fontSize: 11, fontWeight: 600, color: W.gray400, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>App</p>
           {[
-            { label: 'Version', val: '1.0.0' },
-            { label: 'Environment', val: import.meta.env.MODE },
+          { label: 'Version',     val: '1.1.1' },
+            { label: 'Environment', val: import.meta.env.VITE_APP_ENV || 'production' },
           ].map(({ label, val }) => (
             <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={{ fontSize: 13, color: W.gray600 }}>{label}</span>
