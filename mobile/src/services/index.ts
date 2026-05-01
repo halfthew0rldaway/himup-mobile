@@ -6,10 +6,11 @@ interface LoginResponse {
   user: User;
 }
 
+// Unwraps Laravel resource-style { data: { ... } } without destroying nested arrays
 const unwrapOne = (r: any) => {
-  let d = r.data;
-  if (d && d.data) d = d.data;
-  if (Array.isArray(d)) return d[0] || {};
+  let d = r?.data;
+  // Laravel Resource: { data: { id, ... } }
+  if (d && d.data && !Array.isArray(d.data)) d = d.data;
   return d || {};
 };
 
@@ -41,6 +42,9 @@ export const ticketService = {
 
   updateStatus: (id: number, status: string) =>
     api.patch(`/tickets/${id}/status`, { status }).then((r) => r.data),
+
+  takeOwnership: (id: number) =>
+    api.post(`/tickets/${id}/take-ownership`).then((r) => r.data),
 
   create: (payload: Record<string, unknown>) =>
     api.post('/tickets', payload).then((r) => r.data),

@@ -9,6 +9,7 @@ import { AssetsPage } from '@/pages/AssetsPage';
 import { AssetDetailPage } from '@/pages/AssetDetailPage';
 import { AssetScannerPage } from '@/pages/AssetScannerPage';
 import { MaintenancePage } from '@/pages/MaintenancePage';
+import { MaintenanceDetailPage } from '@/pages/MaintenanceDetailPage';
 import { MaintenanceCreatePage } from '@/pages/MaintenanceCreatePage';
 import { NotificationsPage } from '@/pages/NotificationsPage';
 import { ProfilePage } from '@/pages/ProfilePage';
@@ -56,6 +57,7 @@ export const App: React.FC = () => (
         {/* Maintenance */}
         <Route path="maintenance" element={<MaintenancePage />} />
         <Route path="maintenance/create" element={<MaintenanceCreatePage />} />
+        <Route path="maintenance/:id" element={<MaintenanceDetailPage />} />
 
         {/* Notifications */}
         <Route path="notifications" element={<NotificationsPage />} />

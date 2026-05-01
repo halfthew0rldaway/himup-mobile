@@ -9,10 +9,10 @@ const api = axios.create({
 });
 
 // Demo Mode Toggle - Set to false to disable
-const IS_DEMO_MODE = false;
+const IS_DEMO_MODE = true;
 
 // Global mutable tickets for demo simulation
-let fakeTickets = [
+let fakeTickets: any[] = [
   { id: 6, ticket_number: 'TCK-2026-006', title: 'Monitor screen flickering', description: 'My secondary display is flickering constantly.', priority: 'low', status: 'on_hold', created_at: new Date(Date.now() - 400000000).toISOString(), category: { name: 'Hardware' }, requester: { name: 'John Doe' }, pic: { name: 'Demo Engineer' }, branch: { name: 'HQ' } },
   { id: 5, ticket_number: 'TCK-2026-005', title: 'VPN connection dropping', description: 'Users in remote office complain about VPN drops.', priority: 'high', status: 'in_progress', created_at: new Date(Date.now() - 7200000).toISOString(), category: { name: 'Network' }, requester: { name: 'Remote User' }, pic: { name: 'Demo Engineer' }, branch: { name: 'Remote' } },
   { id: 4, ticket_number: 'TCK-2026-004', title: 'New laptop setup', description: 'Please setup the new MacBook for the incoming hire.', priority: 'low', status: 'open', created_at: new Date(Date.now() - 3600000).toISOString(), category: { name: 'Hardware' }, requester: { name: 'HR Dept' }, pic: null, branch: { name: 'HQ' } },
@@ -77,7 +77,9 @@ api.interceptors.request.use((config) => {
         return {
           data: {
             id: 1, name: 'Demo Engineer', email: 'engineer@demo.com',
-            role: { id: 3, name: 'IT Staff', slug: 'it_operations_staff' }
+            role: { id: 3, name: 'IT Staff', slug: 'it_operations_staff' },
+            department: { id: 1, name: 'IT Operations' },
+            branch: { id: 1, name: 'Headquarters' }
           },
           status: 200, statusText: 'OK', headers: {}, config, request: {}
         };
@@ -95,11 +97,11 @@ api.interceptors.request.use((config) => {
         { id: 5, asset_tag: 'AST-LTP-099', name: 'Lenovo ThinkPad X1', status: 'disposed', asset_type: { name: 'Laptop' }, brand: { name: 'Lenovo' }, branch: { name: 'HQ' }, serial_number: 'LNV123', notes: 'Broken screen, disposed.' },
       ];
 
-      const fakeMaint = [
-        { id: 1, title: 'Annual Server Dusting', status: 'pending', created_at: new Date().toISOString(), asset: { name: 'Main Server Rack' } },
-        { id: 2, title: 'Screen Replacement', status: 'completed', created_at: new Date(Date.now() - 400000000).toISOString(), asset: { name: 'Lenovo ThinkPad' } },
-        { id: 3, title: 'Network Switch Firmware', status: 'approved', created_at: new Date(Date.now() - 86400000).toISOString(), asset: { name: 'Cisco Switch 48-port' } },
-        { id: 4, title: 'Battery Replacement', status: 'rejected', created_at: new Date(Date.now() - 172800000).toISOString(), asset: { name: 'MacBook Air' } },
+      let fakeMaint: any[] = [
+        { id: 1, title: 'Annual Server Dusting', status: 'pending', description: 'Full internal cleaning and dust removal for server rack equipment.', scheduled_date: '2026-05-10', created_at: new Date().toISOString(), asset: { id: 4, name: 'Dell PowerEdge R740', asset_tag: 'AST-SRV-001' } },
+        { id: 2, title: 'Screen Replacement', status: 'completed', description: 'Replace cracked LCD screen on the unit.', cost: 850000, created_at: new Date(Date.now() - 400000000).toISOString(), asset: { id: 5, name: 'Lenovo ThinkPad X1', asset_tag: 'AST-LTP-099' } },
+        { id: 3, title: 'Network Switch Firmware', status: 'approved', description: 'Upgrade firmware to latest stable version to resolve CVE-2024-9981.', scheduled_date: '2026-05-05', created_at: new Date(Date.now() - 86400000).toISOString(), asset: { id: 2, name: 'Cisco Switch 48-port', asset_tag: 'AST-NET-042' } },
+        { id: 4, title: 'Battery Replacement', status: 'rejected', description: 'Battery swelling detected, needs replacement.', created_at: new Date(Date.now() - 172800000).toISOString(), asset: { id: 1, name: 'MacBook Air', asset_tag: 'AST-LTP-MB1' } },
       ];
 
       if (ticketMatch) return { data: fakeTickets.find(t => t.id === Number(ticketMatch[1])) || fakeTickets[0], status: 200, statusText: 'OK', headers: {}, config, request: {} };
@@ -140,6 +142,84 @@ api.interceptors.request.use((config) => {
           status: 200, statusText: 'OK', headers: {}, config, request: {}
         };
       }
+      // Fake POST Comments
+      const commentMatch = path.match(/\/tickets\/(\d+)\/comments/);
+      if (config.method?.toLowerCase() === 'post' && commentMatch) {
+        const tId = Number(commentMatch[1]);
+        const ticket = fakeTickets.find(t => t.id === tId);
+        if (ticket) {
+          const body = typeof config.data === 'string' ? JSON.parse(config.data).body : config.data?.body;
+          const userStr = localStorage.getItem('auth_user');
+          const user = userStr ? JSON.parse(userStr) : { name: 'Demo Engineer' };
+          const newComment = { id: Date.now(), body: body || '', created_at: new Date().toISOString(), user };
+          if (!ticket.comments) ticket.comments = [];
+          ticket.comments.push(newComment);
+        }
+        return { data: { message: 'Comment added' }, status: 200, statusText: 'OK', headers: {}, config, request: {} };
+      }
+
+      // Fake PATCH Status
+      const statusMatch = path.match(/\/tickets\/(\d+)\/status/);
+      if (config.method?.toLowerCase() === 'patch' && statusMatch) {
+        const tId = Number(statusMatch[1]);
+        const ticket = fakeTickets.find(t => t.id === tId);
+        if (ticket) {
+          const status = typeof config.data === 'string' ? JSON.parse(config.data).status : config.data?.status;
+          ticket.status = status;
+          ticket.updated_at = new Date().toISOString();
+        }
+        return { data: { message: 'Status updated' }, status: 200, statusText: 'OK', headers: {}, config, request: {} };
+      }
+
+      // Fake Take Ownership
+      const ownershipMatch = path.match(/\/tickets\/(\d+)\/take-ownership/);
+      if (config.method?.toLowerCase() === 'post' && ownershipMatch) {
+        const tId = Number(ownershipMatch[1]);
+        const ticket = fakeTickets.find(t => t.id === tId);
+        const userStr = localStorage.getItem('himup-mobile-auth');
+        let userName = 'Demo Engineer';
+        try { const parsed = JSON.parse(userStr || '{}'); userName = parsed.state?.user?.name || userName; } catch {}
+        if (ticket) {
+          ticket.pic = { name: userName };
+          ticket.status = 'in_progress';
+          ticket.updated_at = new Date().toISOString();
+        }
+        return { data: { message: 'Ownership taken' }, status: 200, statusText: 'OK', headers: {}, config, request: {} };
+      }
+
+      // Fake POST Maintenance create
+      const maintPostMatch = path.match(/^\/asset-maintenances$/);
+      if (config.method?.toLowerCase() === 'post' && maintPostMatch) {
+        const payload = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {};
+        const asset = fakeAssets.find((a: any) => a.id === Number(payload.asset_id));
+        const newMaint: any = {
+          id: Date.now(),
+          title: payload.title || 'New Request',
+          description: payload.description || '',
+          status: 'pending',
+          scheduled_date: payload.scheduled_date || null,
+          cost: null,
+          created_at: new Date().toISOString(),
+          asset: asset ? { id: asset.id, name: asset.name, asset_tag: asset.asset_tag } : { name: 'Unknown Asset' },
+        };
+        fakeMaint.unshift(newMaint);
+        return { data: newMaint, status: 201, statusText: 'Created', headers: {}, config, request: {} };
+      }
+
+      // Fake Approve/Reject maintenance
+      const maintApproveMatch = path.match(/\/asset-maintenances\/(\d+)\/approve/);
+      const maintRejectMatch = path.match(/\/asset-maintenances\/(\d+)\/reject/);
+      if (config.method?.toLowerCase() === 'post' && maintApproveMatch) {
+        const m = fakeMaint.find((x: any) => x.id === Number(maintApproveMatch[1]));
+        if (m) m.status = 'approved';
+        return { data: { message: 'Approved' }, status: 200, statusText: 'OK', headers: {}, config, request: {} };
+      }
+      if (config.method?.toLowerCase() === 'post' && maintRejectMatch) {
+        const m = fakeMaint.find((x: any) => x.id === Number(maintRejectMatch[1]));
+        if (m) m.status = 'rejected';
+        return { data: { message: 'Rejected' }, status: 200, statusText: 'OK', headers: {}, config, request: {} };
+      }
+
       // Fake Notifications
       if (path.includes('/notifications')) {
         return {

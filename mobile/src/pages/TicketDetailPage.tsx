@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, User, Tag, Building, Clock, MessageSquare, Send, Paperclip, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, User, Tag, Building, Clock, MessageSquare, Send, Paperclip, CheckCircle, Loader2, Timer, UserCheck } from 'lucide-react';
 import { ticketService } from '@/services';
-import { format } from 'date-fns';
+import { format, formatDistanceStrict } from 'date-fns';
 import type { Ticket } from '@/types';
-import { W, stickyHeader, card, sectionLabel } from '@/lib/design';
+import { W, stickyHeader, sectionLabel } from '@/lib/design';
 
 const STATUS_INLINE: Record<string, { background: string; color: string }> = {
   open:        { background: '#fff7ed', color: '#c2410c' },
-  in_progress: { background: '#eff6ff', color: '#1d4ed8' },
+  in_progress: { background: '#dbeafe', color: '#1d4ed8' },
   closed:      { background: '#f3f4f6', color: '#374151' },
   on_hold:     { background: '#fefce8', color: '#a16207' },
 };
@@ -24,6 +24,36 @@ const NEXT: Record<string, { label: string; next: string; bg: string; shadow: st
   in_progress: { label: 'Close Ticket',  next: 'closed',      bg: '#16a34a', shadow: 'rgba(22,163,74,0.3)' },
 };
 
+// SLA duration limits in ms per priority
+const SLA_MS: Record<string, number> = {
+  critical: 4 * 60 * 60 * 1000,   // 4h
+  high:     8 * 60 * 60 * 1000,   // 8h
+  medium:   24 * 60 * 60 * 1000,  // 24h
+  low:      72 * 60 * 60 * 1000,  // 72h
+};
+
+function useLiveTimer(startIso: string | undefined, active: boolean) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!active || !startIso) return;
+    const update = () => setElapsed(Date.now() - new Date(startIso).getTime());
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [startIso, active]);
+  return elapsed;
+}
+
+function formatMs(ms: number) {
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}h ${m}m ${sec}s`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
+}
+
 export const TicketDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -34,11 +64,29 @@ export const TicketDetailPage: React.FC = () => {
     queryKey: ['ticket', id],
     queryFn: () => ticketService.getOne(Number(id)),
     enabled: !!id,
+    refetchInterval: 15000, // refresh every 15s for live updates
+  });
+
+  const isActive = ticket?.status === 'in_progress';
+  const elapsed = useLiveTimer(ticket?.created_at, isActive);
+  const slaLimit = ticket ? SLA_MS[ticket.priority] ?? SLA_MS.medium : 0;
+  const slaPercent = slaLimit ? Math.min((elapsed / slaLimit) * 100, 100) : 0;
+  const slaBreached = elapsed > slaLimit && isActive;
+
+  const takeOwnershipMutation = useMutation({
+    mutationFn: () => ticketService.takeOwnership(Number(id)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ticket', id] });
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+    },
   });
 
   const statusMutation = useMutation({
     mutationFn: (status: string) => ticketService.updateStatus(Number(id), status),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['ticket', id] }); queryClient.invalidateQueries({ queryKey: ['tickets'] }); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ticket', id] });
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+    },
   });
 
   const commentMutation = useMutation({
@@ -64,6 +112,7 @@ export const TicketDetailPage: React.FC = () => {
   const st = STATUS_INLINE[ticket.status] || { background: W.gray100, color: W.gray700 };
   const pr = PRIORITY_INLINE[ticket.priority] || { background: W.gray100, color: W.gray700 };
   const next = NEXT[ticket.status];
+  const comments = Array.isArray(ticket.comments) ? ticket.comments : [];
 
   return (
     <div style={{ minHeight: '100%', background: W.gray50 }} className="page-enter">
@@ -79,12 +128,58 @@ export const TicketDetailPage: React.FC = () => {
       </div>
 
       <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {/* Status card */}
+        {/* Status + Action card */}
         <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${W.gray100b}`, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', padding: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: next ? 12 : 0 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, padding: '4px 12px', borderRadius: 20, ...st }}>{ticket.status.replace('_', ' ')}</span>
-            <span style={{ fontSize: 12, fontWeight: 500, padding: '3px 10px', borderRadius: 20, ...pr }}>{ticket.priority}</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: next || isActive ? 12 : 0 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, padding: '4px 12px', borderRadius: 20, textTransform: 'capitalize', ...st }}>{ticket.status.replace('_', ' ')}</span>
+            <span style={{ fontSize: 12, fontWeight: 500, padding: '3px 10px', borderRadius: 20, textTransform: 'capitalize', ...pr }}>{ticket.priority}</span>
           </div>
+
+          {/* SLA Live Timer — shown while in progress */}
+          {isActive && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Timer size={13} color={slaBreached ? '#dc2626' : '#2563eb'} />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: slaBreached ? '#dc2626' : '#2563eb' }}>
+                    {slaBreached ? 'SLA BREACHED' : 'SLA Running'}
+                  </span>
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: slaBreached ? '#dc2626' : W.gray900 }}>
+                  {formatMs(elapsed)}
+                </span>
+              </div>
+              <div style={{ height: 6, background: W.gray100, borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: 99, transition: 'width 0.5s',
+                  width: `${slaPercent}%`,
+                  background: slaBreached ? '#dc2626' : slaPercent > 80 ? '#f97316' : '#2563eb',
+                }} />
+              </div>
+              <p style={{ fontSize: 11, color: W.gray400, marginTop: 4 }}>
+                SLA limit: {formatDistanceStrict(0, slaLimit, { unit: 'hour' })}
+              </p>
+            </div>
+          )}
+
+          {/* Closed duration */}
+          {ticket.status === 'closed' && ticket.created_at && ticket.updated_at && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, background: '#f0fdf4', borderRadius: 8, padding: '8px 12px' }}>
+              <CheckCircle size={13} color="#16a34a" />
+              <span style={{ fontSize: 12, color: '#15803d' }}>
+                Resolved in {formatDistanceStrict(new Date(ticket.created_at), new Date(ticket.updated_at))}
+              </span>
+            </div>
+          )}
+
+          {/* Take Ownership — show when ticket is open and has no PIC */}
+          {ticket.status === 'open' && !ticket.pic && (
+            <button onClick={() => takeOwnershipMutation.mutate()} disabled={takeOwnershipMutation.isPending} className="press"
+              style={{ width: '100%', padding: '11px', background: '#7c3aed', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 12px rgba(124,58,237,0.3)', marginBottom: 10, opacity: takeOwnershipMutation.isPending ? 0.7 : 1 }}>
+              {takeOwnershipMutation.isPending ? <><Loader2 size={15} className="spin" /> Assigning…</> : <><UserCheck size={15} />Take Ownership</>}
+            </button>
+          )}
+
           {next && (
             <button onClick={() => statusMutation.mutate(next.next)} disabled={statusMutation.isPending} className="press"
               style={{ width: '100%', padding: '11px', background: next.bg, border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: `0 4px 12px ${next.shadow}`, opacity: statusMutation.isPending ? 0.7 : 1 }}>
@@ -123,17 +218,21 @@ export const TicketDetailPage: React.FC = () => {
         <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${W.gray100b}`, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', padding: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
             <MessageSquare size={14} color={W.gray400} />
-            <p style={{ ...sectionLabel, marginBottom: 0 }}>Comments ({ticket.comments?.length ?? 0})</p>
+            <p style={{ ...sectionLabel, marginBottom: 0 }}>Comments ({comments.length})</p>
           </div>
 
-          {(ticket.comments || []).map((c) => (
+          {comments.length === 0 && (
+            <p style={{ fontSize: 13, color: W.gray400, textAlign: 'center', padding: '12px 0' }}>No comments yet</p>
+          )}
+
+          {comments.map((c) => (
             <div key={c.id} style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
               <div style={{ width: 28, height: 28, borderRadius: '50%', background: W.orange100, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: W.orange700, flexShrink: 0 }}>
-                {c.user.name[0].toUpperCase()}
+                {c.user?.name?.[0]?.toUpperCase() || '?'}
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: W.gray900 }}>{c.user.name}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: W.gray900 }}>{c.user?.name || 'Unknown'}</span>
                   <span style={{ fontSize: 11, color: W.gray400 }}>{format(new Date(c.created_at), 'dd MMM · HH:mm')}</span>
                 </div>
                 <p style={{ fontSize: 13, color: W.gray600, lineHeight: 1.5 }}>{c.body}</p>

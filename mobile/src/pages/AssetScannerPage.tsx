@@ -4,8 +4,7 @@ import { ArrowLeft, ScanLine, X, Loader2 } from 'lucide-react';
 import { Camera } from '@capacitor/camera';
 import { assetService } from '@/services';
 
-const ZXING_PKG = '@zxing/browser';
-
+import { Html5Qrcode } from 'html5-qrcode';
 export const AssetScannerPage: React.FC = () => {
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -17,6 +16,8 @@ export const AssetScannerPage: React.FC = () => {
 
   useEffect(() => {
     let active = true;
+    let html5QrCode: any = null;
+
     const start = async () => {
       try {
         const perm = await Camera.requestPermissions();
@@ -25,18 +26,39 @@ export const AssetScannerPage: React.FC = () => {
           return;
         }
 
-        const mod = await import(/* @vite-ignore */ ZXING_PKG).catch(() => null);
-        if (!mod || !active) return;
-        const codeReader = new mod.BrowserMultiFormatReader();
-        readerRef.current = codeReader;
+        if (!active) return;
         setScanning(true);
-        await codeReader.decodeFromVideoDevice(undefined, videoRef.current!, (result: any) => {
-          if (result && active) handleFound(result.getText());
-        });
+
+        // Small delay to ensure the DOM element is ready
+        setTimeout(() => {
+          if (!active) return;
+          try {
+            html5QrCode = new Html5Qrcode('qr-reader');
+            readerRef.current = html5QrCode;
+            html5QrCode.start(
+              { facingMode: 'environment' },
+              { fps: 10, qrbox: { width: 250, height: 250 } },
+              (decodedText: string) => {
+                if (active) handleFound(decodedText);
+              },
+              () => { /* Ignore standard scanning errors */ }
+            ).catch(() => {
+              if (active) setScanning(false);
+            });
+          } catch (e) {
+            if (active) setScanning(false);
+          }
+        }, 300);
+
       } catch { setScanning(false); }
     };
     start();
-    return () => { active = false; readerRef.current?.reset?.(); };
+    return () => {
+      active = false;
+      if (readerRef.current && readerRef.current.isScanning) {
+        readerRef.current.stop().catch(() => {});
+      }
+    };
   }, []);
 
   const handleFound = async (tag: string) => {
@@ -44,7 +66,7 @@ export const AssetScannerPage: React.FC = () => {
     setLoading(true); setError('');
     try {
       const data = await assetService.getByTag(tag);
-      const asset = data?.data?.[0];
+      const asset = data?.data?.[0] || (Array.isArray(data) ? data[0] : null);
       if (asset) navigate(`/assets/${asset.id}`, { replace: true });
       else { setError(`No asset found for tag: "${tag}"`); setLoading(false); }
     } catch { setError('Lookup failed. Try again.'); setLoading(false); }
@@ -66,28 +88,14 @@ export const AssetScannerPage: React.FC = () => {
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         {scanning ? (
           <>
-            <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            {/* Dark overlay with cutout */}
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)' }} />
-              <div style={{ position: 'relative', width: 256, height: 256 }}>
-                {/* Cutout border */}
-                <div style={{ position: 'absolute', inset: 0, border: '2px solid #f97316', borderRadius: 20 }} />
-                {/* Corner accents */}
-                {[
-                  { top: -2, left: -2, borderWidth: '3px 0 0 3px' },
-                  { top: -2, right: -2, borderWidth: '3px 3px 0 0' },
-                  { bottom: -2, left: -2, borderWidth: '0 0 3px 3px' },
-                  { bottom: -2, right: -2, borderWidth: '0 3px 3px 0' },
-                ].map((pos, i) => (
-                  <div key={i} style={{ position: 'absolute', width: 24, height: 24, borderStyle: 'solid', borderColor: '#f97316', borderRadius: 4, ...pos }} />
-                ))}
-                {/* Scan line */}
-                <ScanLine size={40} color="#f97316" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', opacity: 0.7 }} />
+            <div id="qr-reader" style={{ width: '100%', height: '100%', minHeight: '60vh', objectFit: 'cover', background: '#000' }}></div>
+            {/* Overlay */}
+            <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <p style={{ position: 'absolute', bottom: '15%', color: 'rgba(255,255,255,0.8)', fontSize: 13, background: 'rgba(0,0,0,0.5)', padding: '6px 16px', borderRadius: 20 }}>
+                  Point camera at barcode or QR code
+                </p>
               </div>
-              <p style={{ position: 'absolute', bottom: '15%', color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>
-                Point camera at barcode or QR code
-              </p>
             </div>
             {loading && (
               <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>

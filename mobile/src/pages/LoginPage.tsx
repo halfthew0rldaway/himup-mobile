@@ -5,6 +5,7 @@ import { Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
 import { authService } from '@/services';
 import { useAuthStore, isAllowedRole } from '@/store/auth.store';
 import { W, primaryBtn } from '@/lib/design';
+import logoSrc from '@/assets/logo.png';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -47,12 +48,11 @@ export const LoginPage: React.FC = () => {
     }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
 
-        {/* Logo + title — matches web exactly */}
+        {/* Logo + title */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{ width: 88, height: 88, margin: '0 auto 16px', borderRadius: 24, background: 'linear-gradient(135deg, #ffffff 0%, #fff7ed 100%)', boxShadow: '0 8px 24px rgba(249, 115, 22, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(249, 115, 22, 0.1)' }}>
-            <img src="https://himup.id/logo.png" alt="HiMup Logo"
-              onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }}
-              style={{ width: 56, height: 56, objectFit: 'contain', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.05))' }}
+          <div style={{ width: 100, height: 100, margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img src={logoSrc} alt="HiMup Logo"
+              style={{ width: 100, height: 100, objectFit: 'contain' }}
             />
           </div>
           <h1 style={{ fontSize: 26, fontWeight: 700, color: W.gray900, marginBottom: 4 }}>HiMup</h1>

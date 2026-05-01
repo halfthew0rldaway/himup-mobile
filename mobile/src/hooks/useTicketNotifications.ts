@@ -19,62 +19,60 @@ export const useTicketNotifications = () => {
       if (perm.display !== 'granted') return;
 
       // Create notification channel for Android 8.0+
+      // importance: 5 = IMPORTANCE_HIGH → shows as heads-up overlay popup
       await LocalNotifications.createChannel({
-        id: 'tickets',
+        id: 'himup_tickets',
         name: 'New Tickets',
         description: 'Notifications for new IT support tickets',
         importance: 5,
         visibility: 1,
         vibration: true,
+        lights: true,
+        lightColor: '#f97316',
       });
 
-      // Polling function
       const checkNewTickets = async () => {
         try {
-          const res = await ticketService.getAll({ sort: 'desc', limit: 5 });
+          const res = await ticketService.getAll({ sort: 'desc', per_page: 10, page: 1 });
           const tickets = Array.isArray(res?.data) ? res.data : [];
-          
+
           if (!initialized.current) {
-            // First run: just save the IDs
+            // First run: snapshot existing IDs so we don't notify old tickets
             tickets.forEach((t: any) => knownTicketIds.current.add(t.id));
             initialized.current = true;
             return;
           }
 
-          // Check for new IDs
           const newTickets = tickets.filter((t: any) => !knownTicketIds.current.has(t.id));
-          
-          if (newTickets.length > 0) {
-            for (const ticket of newTickets) {
-              knownTicketIds.current.add(ticket.id);
-              
-              await LocalNotifications.schedule({
-                notifications: [
-                  {
-                    title: 'New IT Ticket Assigned!',
-                    body: `${ticket.ticket_number}: ${ticket.title}`,
-                    id: ticket.id,
-                    schedule: { at: new Date(Date.now() + 1000) },
-                    sound: 'beep.wav',
-                    smallIcon: 'ic_stat_icon_config_sample',
-                    iconColor: '#f97316',
-                    channelId: 'tickets',
-                    actionTypeId: '',
-                    extra: null,
-                  }
-                ]
-              });
-            }
+
+          for (const ticket of newTickets) {
+            knownTicketIds.current.add(ticket.id);
+
+            await LocalNotifications.schedule({
+              notifications: [
+                {
+                  title: '🔔 New Ticket Incoming',
+                  body: `[${(ticket.priority || 'LOW').toUpperCase()}] ${ticket.ticket_number}: ${ticket.title}`,
+                  id: ticket.id % 2147483647, // must be within int32 range
+                  schedule: { at: new Date(Date.now() + 500) },
+                  smallIcon: 'ic_stat_notify',
+                  iconColor: '#f97316',
+                  channelId: 'himup_tickets',
+                  actionTypeId: '',
+                  extra: { ticketId: String(ticket.id) },
+                  ongoing: false,
+                  autoCancel: true,
+                }
+              ]
+            });
           }
-        } catch (err) {
-          // Ignore network errors in polling
+        } catch {
+          // Ignore network errors silently
         }
       };
 
-      // Initial check
       checkNewTickets();
-      // Poll every 10 seconds
-      interval = setInterval(checkNewTickets, 10000);
+      interval = setInterval(checkNewTickets, 15000);
     };
 
     setup();
