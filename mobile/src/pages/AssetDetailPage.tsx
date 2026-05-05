@@ -1,7 +1,7 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Package, Calendar, DollarSign, FileText, MapPin, Hash, Loader2, Wrench, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, Package, Calendar, DollarSign, FileText, MapPin, Hash, Loader2, Wrench, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { assetService } from '@/services';
 import { format } from 'date-fns';
 import type { Asset } from '@/types';
@@ -33,6 +33,12 @@ export const AssetDetailPage: React.FC = () => {
     enabled: !!id,
   });
 
+  const { data: history, isLoading: historyLoading } = useQuery({
+    queryKey: ['asset-history', id],
+    queryFn: () => assetService.getHistory(Number(id)),
+    enabled: !!id,
+  });
+
   if (isLoading || !asset) {
     return (
       <div style={{ minHeight: '100%', background: W.gray50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -42,6 +48,7 @@ export const AssetDetailPage: React.FC = () => {
   }
 
   const badge = STATUS_BADGE[asset.status] || { background: W.gray100, color: W.gray600 };
+  const historyItems = Array.isArray(history) ? history : history?.data || [];
 
   return (
     <div style={{ minHeight: '100%', background: W.gray50 }} className="page-enter">
@@ -79,8 +86,8 @@ export const AssetDetailPage: React.FC = () => {
           <p style={{ ...sectionLabel }}>Asset Info</p>
           {[
             { icon: Hash,        l: 'Asset Tag',   v: asset.asset_tag },
-            { icon: Hash,        l: 'Serial No.',  v: asset.serial_number },
-            { icon: MapPin,      l: 'Branch',      v: asset.branch?.name },
+            { icon: Hash,        l: 'Serial No.',  v: asset.serial_number || asset.sn },
+            { icon: MapPin,      l: 'Branch',      v: asset.branch?.name || asset.branch?.nama_branch },
             { icon: Calendar,    l: 'Purchased',   v: asset.purchase_date ? format(new Date(asset.purchase_date), 'dd MMM yyyy') : null },
             { icon: DollarSign,  l: 'Cost',        v: asset.purchase_cost ? `Rp ${Number(asset.purchase_cost).toLocaleString('id-ID')}` : null },
           ].filter(i => i.v).map(({ icon: Icon, l, v }) => (
@@ -92,27 +99,38 @@ export const AssetDetailPage: React.FC = () => {
           ))}
         </div>
 
-        {/* Notes */}
-        {asset.notes && (
+        {/* History */}
+        {historyItems.length > 0 && (
           <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${W.gray100b}`, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', padding: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-              <FileText size={14} color={W.gray400} /><p style={{ ...sectionLabel, marginBottom: 0 }}>Notes</p>
-            </div>
-            <p style={{ fontSize: 13, color: W.gray600, lineHeight: 1.6 }}>{asset.notes}</p>
+            <p style={{ ...sectionLabel }}>Transfer History</p>
+            {historyItems.map((h: any, idx: number) => (
+              <div key={h.id} style={{ position: 'relative', paddingLeft: 20, paddingBottom: idx === historyItems.length - 1 ? 0 : 16 }}>
+                {idx !== historyItems.length - 1 && <div style={{ position: 'absolute', left: 4, top: 16, bottom: 0, width: 1, background: W.gray200b }} />}
+                <div style={{ position: 'absolute', left: 0, top: 4, width: 9, height: 9, borderRadius: '50%', background: W.orange500, border: '2px solid #fff', zIndex: 1 }} />
+                <p style={{ fontSize: 13, fontWeight: 600, color: W.gray900 }}>{h.to_branch?.name || h.to_branch?.nama_branch}</p>
+                <p style={{ fontSize: 11, color: W.gray400, marginTop: 2 }}>
+                  From {h.from_branch?.name || h.from_branch?.nama_branch} · {format(new Date(h.mutation_date), 'dd MMM yyyy')}
+                </p>
+                {h.reason && <p style={{ fontSize: 12, color: W.gray500, marginTop: 4, fontStyle: 'italic' }}>"{h.reason}"</p>}
+              </div>
+            ))}
           </div>
         )}
 
-        {/* Maintenance CTA — matching web's orange button */}
-        <button onClick={() => navigate(`/maintenance/create?asset_id=${asset.id}`)} className="press"
-          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, background: '#fff', border: `1px solid ${W.gray100b}`, borderRadius: 12, padding: 14, cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Wrench size={18} color="#b45309" />
-          </div>
-          <div style={{ textAlign: 'left' }}>
-            <p style={{ fontSize: 13, fontWeight: 600, color: W.gray900 }}>Request Maintenance</p>
-            <p style={{ fontSize: 12, color: W.gray500, marginTop: 2 }}>Submit a maintenance request for this asset</p>
-          </div>
-        </button>
+        {/* CTAs */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <button onClick={() => navigate(`/maintenance/create?asset_id=${asset.id}`)} className="press"
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, background: '#fff', border: `1px solid ${W.gray100b}`, borderRadius: 12, padding: 14, cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+            <Wrench size={20} color="#b45309" />
+            <span style={{ fontSize: 13, fontWeight: 600, color: W.gray900 }}>Maintenance</span>
+          </button>
+          
+          <button onClick={() => navigate(`/tickets/create?asset_id=${asset.id}`)} className="press"
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, background: '#fff', border: `1px solid ${W.gray100b}`, borderRadius: 12, padding: 14, cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+            <AlertCircle size={20} color="#dc2626" />
+            <span style={{ fontSize: 13, fontWeight: 600, color: W.gray900 }}>Report Issue</span>
+          </button>
+        </div>
       </div>
     </div>
   );

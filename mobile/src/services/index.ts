@@ -70,6 +70,9 @@ export const assetService = {
 
   getByTag: (tag: string) =>
     api.get('/assets', { params: { search: tag, per_page: 1 } }).then((r) => r.data),
+
+  getHistory: (id: number) =>
+    api.get(`/assets/${id}/mutations`).then((r) => r.data),
 };
 
 export const maintenanceService = {
@@ -87,6 +90,9 @@ export const maintenanceService = {
 
   reject: (id: number, reason?: string) =>
     api.post(`/asset-maintenances/${id}/reject`, { reason }).then((r) => r.data),
+
+  complete: (id: number) =>
+    api.post(`/asset-maintenances/${id}/complete`).then((r) => r.data),
 };
 
 export const notificationService = {
@@ -94,4 +100,14 @@ export const notificationService = {
   getUnreadCount: () => api.get('/notifications/unread-count').then((r) => r.data),
   markAllRead: () => api.put('/notifications/mark-all-read').then((r) => r.data),
   markRead: (id: number) => api.put(`/notifications/${id}/read`).then((r) => r.data),
+};
+
+export const branchService = {
+  getAll: (params?: Record<string, unknown>) =>
+    api.get('/branches', { params }).then((r) => r.data),
+};
+
+export const categoryService = {
+  getAll: (params?: Record<string, unknown>) =>
+    api.get('/ticket-categories', { params }).then((r) => r.data),
 };

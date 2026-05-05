@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Ticket, Search, X, Filter, Clock, Tag, User, Building, MessageSquare, ChevronUp, ChevronDown } from 'lucide-react';
+import { Ticket, Search, X, Filter, Clock, Tag, User, Building, MessageSquare, ChevronUp, ChevronDown, Plus } from 'lucide-react';
 import { ticketService } from '@/services';
 import { formatDistanceToNow } from 'date-fns';
 import type { Ticket as TicketType } from '@/types';
@@ -27,6 +27,7 @@ const PRIORITY_INLINE: Record<string, { background: string; color: string }> = {
 const STATUS_INLINE: Record<string, { background: string; color: string }> = {
   open:        { background: '#fff7ed', color: '#c2410c' },
   in_progress: { background: '#eff6ff', color: '#1d4ed8' },
+  resolved:    { background: '#f0fdf4', color: '#15803d' },
   closed:      { background: '#f3f4f6', color: '#374151' },
   on_hold:     { background: '#fefce8', color: '#a16207' },
 };
@@ -55,6 +56,7 @@ export const TicketsPage: React.FC = () => {
     total: meta?.total || 0,
     open: (data as any)?.open_count ?? 0,
     in_progress: (data as any)?.in_progress_count ?? 0,
+    resolved: (data as any)?.resolved_count ?? 0,
     closed: (data as any)?.closed_count ?? 0,
   };
   const hasFilters = !!(search || status || priority);
@@ -100,6 +102,7 @@ export const TicketsPage: React.FC = () => {
             { label: 'Total', val: stats.total, active: !status, onClick: () => { setStatus(''); setPage(1); }, activeBg: '#111827', activeText: '#fff', inactiveBg: '#fff', inactiveText: W.gray900 },
             { label: 'Open', val: stats.open, active: status === 'open', onClick: () => { setStatus(status === 'open' ? '' : 'open'); setPage(1); }, activeBg: W.orange500, activeText: '#fff', inactiveBg: '#fff7ed', inactiveText: W.orange700 },
             { label: 'In Prog.', val: stats.in_progress, active: status === 'in_progress', onClick: () => { setStatus(status === 'in_progress' ? '' : 'in_progress'); setPage(1); }, activeBg: '#2563eb', activeText: '#fff', inactiveBg: '#eff6ff', inactiveText: '#1d4ed8' },
+            { label: 'Resolved', val: stats.resolved, active: status === 'resolved', onClick: () => { setStatus(status === 'resolved' ? '' : 'resolved'); setPage(1); }, activeBg: '#16a34a', activeText: '#fff', inactiveBg: '#f0fdf4', inactiveText: '#15803d' },
             { label: 'Closed', val: stats.closed, active: status === 'closed', onClick: () => { setStatus(status === 'closed' ? '' : 'closed'); setPage(1); }, activeBg: '#4b5563', activeText: '#fff', inactiveBg: W.gray50, inactiveText: W.gray700 },
           ].map(({ label, val, active, onClick, activeBg, activeText, inactiveBg, inactiveText }) => (
             <button key={label} onClick={onClick} style={{ flex: '1 1 calc(25% - 5px)', minWidth: 70, padding: '8px 4px', borderRadius: 10, border: '1px solid', borderColor: active ? activeBg : W.gray100b, background: active ? activeBg : inactiveBg, textAlign: 'center', cursor: 'pointer', transition: 'all 0.15s' }}>
@@ -135,6 +138,7 @@ export const TicketsPage: React.FC = () => {
                   <option value="">All</option>
                   <option value="open">🟠 Open</option>
                   <option value="in_progress">🔵 In Progress</option>
+                  <option value="resolved">🟢 Resolved</option>
                   <option value="closed">⚫ Closed</option>
                   <option value="on_hold">🟡 On Hold</option>
                 </select>
@@ -235,6 +239,12 @@ export const TicketsPage: React.FC = () => {
         )}
       </div>
     </div>
+
+    {/* FAB for On-site reporting */}
+    <button onClick={() => navigate('/tickets/create')} className="press"
+      style={{ position: 'fixed', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)', right: 20, width: 56, height: 56, background: 'linear-gradient(135deg,#f97316,#ef4444)', border: 'none', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 24px rgba(249,115,22,0.4)', cursor: 'pointer', zIndex: 100 }}>
+      <Plus size={24} color="#fff" />
+    </button>
     </>
   );
 };

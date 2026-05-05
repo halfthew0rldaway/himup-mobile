@@ -34,6 +34,10 @@ export const MaintenanceDetailPage: React.FC = () => {
     mutationFn: () => maintenanceService.reject(Number(id)),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['maintenance', id] }); queryClient.invalidateQueries({ queryKey: ['maintenances'] }); },
   });
+  const completeMutation = useMutation({
+    mutationFn: () => maintenanceService.complete(Number(id)),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['maintenance', id] }); queryClient.invalidateQueries({ queryKey: ['maintenances'] }); },
+  });
 
   if (isLoading) {
     return (
@@ -62,8 +66,9 @@ export const MaintenanceDetailPage: React.FC = () => {
   }
 
   const st = STATUS_INLINE[maint.status] || { background: W.gray100, color: W.gray700 };
-  const canAct = maint.status === 'pending';
-  const isPending = approveMutation.isPending || rejectMutation.isPending;
+  const canApprove = maint.status === 'pending';
+  const canComplete = maint.status === 'approved';
+  const isPending = approveMutation.isPending || rejectMutation.isPending || completeMutation.isPending;
 
   return (
     <div style={{ minHeight: '100%', background: W.gray50 }} className="page-enter">
@@ -120,8 +125,8 @@ export const MaintenanceDetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* Actions — only for pending */}
-        {canAct && (
+        {/* Actions */}
+        {canApprove && (
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={() => rejectMutation.mutate()} disabled={isPending} className="press"
               style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, color: '#b91c1c', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
@@ -134,6 +139,14 @@ export const MaintenanceDetailPage: React.FC = () => {
               Approve
             </button>
           </div>
+        )}
+
+        {canComplete && (
+          <button onClick={() => completeMutation.mutate()} disabled={isPending} className="press"
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', background: '#2563eb', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer', boxShadow: '0 4px 12px rgba(37,99,235,0.3)' }}>
+            {completeMutation.isPending ? <Loader2 size={15} className="spin" /> : <CheckCircle size={15} />}
+            Selesaikan Pekerjaan
+          </button>
         )}
       </div>
     </div>

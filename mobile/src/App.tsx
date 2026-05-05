@@ -13,6 +13,7 @@ import { MaintenanceDetailPage } from '@/pages/MaintenanceDetailPage';
 import { MaintenanceCreatePage } from '@/pages/MaintenanceCreatePage';
 import { NotificationsPage } from '@/pages/NotificationsPage';
 import { ProfilePage } from '@/pages/ProfilePage';
+import { TicketCreatePage } from '@/pages/TicketCreatePage';
 import { Wrench } from 'lucide-react';
 
 const NoAccess: React.FC = () => (
@@ -46,7 +47,7 @@ export const App: React.FC = () => (
 
         {/* Tickets */}
         <Route path="tickets" element={<TicketsPage />} />
-
+        <Route path="tickets/create" element={<TicketCreatePage />} />
         <Route path="tickets/:id" element={<TicketDetailPage />} />
 
         {/* Assets */}

@@ -13,6 +13,7 @@ const STORAGE_URL = 'https://api.himup.id/storage/';
 const STATUS_INLINE: Record<string, { background: string; color: string }> = {
   open:        { background: '#fff7ed', color: '#c2410c' },
   in_progress: { background: '#dbeafe', color: '#1d4ed8' },
+  resolved:    { background: '#f0fdf4', color: '#15803d' },
   closed:      { background: '#f3f4f6', color: '#374151' },
   on_hold:     { background: '#fefce8', color: '#a16207' },
 };
@@ -24,7 +25,7 @@ const PRIORITY_INLINE: Record<string, { background: string; color: string }> = {
 };
 const NEXT: Record<string, { label: string; next: string; bg: string; shadow: string }> = {
   open:        { label: 'Start Working', next: 'in_progress', bg: '#2563eb', shadow: 'rgba(37,99,235,0.3)' },
-  in_progress: { label: 'Close Ticket',  next: 'closed',      bg: '#16a34a', shadow: 'rgba(22,163,74,0.3)' },
+  in_progress: { label: 'Selesaikan Tiket', next: 'resolved', bg: '#16a34a', shadow: 'rgba(22,163,74,0.3)' },
 };
 
 // SLA limits per priority
@@ -66,7 +67,7 @@ export const TicketDetailPage: React.FC = () => {
 
   // Live SLA timer — counts from created_at while not yet closed
   useEffect(() => {
-    if (!ticket || ticket.status === 'closed') return;
+    if (!ticket || ticket.status === 'closed' || ticket.status === 'resolved') return;
     const update = () => setElapsed(Date.now() - new Date(ticket.created_at).getTime());
     update();
     const t = setInterval(update, 1000);
@@ -76,7 +77,8 @@ export const TicketDetailPage: React.FC = () => {
   const isActive = ticket?.status === 'in_progress';
   const slaLimit = ticket ? (SLA_MS[ticket.priority] ?? SLA_MS.medium) : 0;
   const slaPercent = slaLimit ? Math.min((elapsed / slaLimit) * 100, 100) : 0;
-  const slaBreached = elapsed > slaLimit && ticket?.status !== 'closed';
+  const isFinished = ticket?.status === 'closed' || ticket?.status === 'resolved';
+  const slaBreached = elapsed > slaLimit && !isFinished;
 
   const takeOwnershipMutation = useMutation({
     mutationFn: () => ticketService.takeOwnership(Number(id), user!.id),
@@ -144,7 +146,7 @@ export const TicketDetailPage: React.FC = () => {
           </div>
 
           {/* SLA — shows while open or in_progress */}
-          {ticket.status !== 'closed' && (
+          {!isFinished && (
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -166,8 +168,8 @@ export const TicketDetailPage: React.FC = () => {
             </div>
           )}
 
-          {/* Closed resolution time */}
-          {ticket.status === 'closed' && (ticket as any).closed_at && (
+          {/* Resolved/Closed resolution time */}
+          {isFinished && (ticket as any).closed_at && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, background: '#f0fdf4', borderRadius: 8, padding: '8px 12px' }}>
               <CheckCircle size={13} color="#16a34a" />
               <span style={{ fontSize: 12, color: '#15803d' }}>

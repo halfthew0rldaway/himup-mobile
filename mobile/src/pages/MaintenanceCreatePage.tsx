@@ -21,6 +21,7 @@ export const MaintenanceCreatePage: React.FC = () => {
   const [description, setDescription] = useState('');
   const [assetId, setAssetId] = useState(prefilledAssetId);
   const [scheduledDate, setScheduledDate] = useState('');
+  const [cost, setCost] = useState('');
 
   const { data: assetsData } = useQuery({
     queryKey: ['assets-dropdown'],
@@ -33,6 +34,7 @@ export const MaintenanceCreatePage: React.FC = () => {
       description, 
       asset_id: Number(assetId), 
       maintenance_date: scheduledDate || undefined,
+      cost: cost ? Number(cost) : undefined,
       status: 'scheduled'
     }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['maintenances'] }); navigate('/maintenance'); },
@@ -73,9 +75,15 @@ export const MaintenanceCreatePage: React.FC = () => {
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder="Detailed description (optional)..." style={{ ...inputStyle, resize: 'none' }} />
           </div>
 
-          <div>
-            <label style={labelStyle}>Scheduled Date</label>
-            <input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} style={inputStyle} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={labelStyle}>Scheduled Date</label>
+              <input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Estimated Cost (Rp)</label>
+              <input type="number" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="0" style={inputStyle} />
+            </div>
           </div>
         </div>
 

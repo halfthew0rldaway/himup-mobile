@@ -28,7 +28,7 @@ export interface Ticket {
   ticket_number: string;
   title: string;
   description: string;
-  status: 'open' | 'in_progress' | 'closed' | 'on_hold';
+  status: 'open' | 'in_progress' | 'resolved' | 'closed' | 'on_hold';
   priority: 'low' | 'medium' | 'high' | 'critical';
   created_at: string;
   updated_at: string;
@@ -45,12 +45,13 @@ export interface Asset {
   asset_tag: string;
   name: string;
   serial_number?: string;
+  sn?: string; // Fallback for serial number
   status: 'active' | 'inactive' | 'maintenance' | 'disposed';
   purchase_date?: string;
   purchase_cost?: number;
   asset_type?: { id: number; name: string };
   brand?: { id: number; name: string };
-  branch?: { id: number; name: string };
+  branch?: { id: number; name: string; nama_branch?: string };
   notes?: string;
   created_at: string;
   updated_at: string;
