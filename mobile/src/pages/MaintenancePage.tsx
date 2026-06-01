@@ -6,12 +6,14 @@ import { maintenanceService } from '@/services';
 import { format } from 'date-fns';
 import type { AssetMaintenance } from '@/types';
 import { W, stickyHeader } from '@/lib/design';
+import { PullToRefresh } from '@/components/PullToRefresh';
 
 const STATUS_BADGE: Record<string, { background: string; color: string }> = {
-  pending:   { background: '#fefce8', color: '#a16207' },
-  approved:  { background: '#eff6ff', color: '#1d4ed8' },
-  rejected:  { background: '#fef2f2', color: '#b91c1c' },
-  completed: { background: '#f0fdf4', color: '#15803d' },
+  scheduled:   { background: '#eff6ff', color: '#2563eb' },
+  pending:     { background: '#eff6ff', color: '#2563eb' },
+  in_progress: { background: '#fefce8', color: '#d97706' },
+  approved:    { background: '#fefce8', color: '#d97706' },
+  completed:   { background: '#f0fdf4', color: '#16a34a' },
 };
 
 export const MaintenancePage: React.FC = () => {
@@ -20,17 +22,34 @@ export const MaintenancePage: React.FC = () => {
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch: refetchList } = useQuery({
     queryKey: ['maintenances', search, status, page],
     queryFn: () => maintenanceService.getAll({ search, status, page, per_page: 15 }),
   });
 
+  const { data: statsData, refetch: refetchStats } = useQuery({
+    queryKey: ['maintenances-stats', search],
+    queryFn: () => maintenanceService.getAll({ search, per_page: 500 }),
+  });
+
+  const handleRefresh = async () => {
+    await Promise.all([refetchList(), refetchStats()]);
+  };
+
   const items: AssetMaintenance[] = data?.data || [];
   const meta = data?.meta;
 
+  const stats = {
+    total: statsData?.meta?.total || 0,
+    scheduled: statsData?.data?.filter((i: any) => i.status === 'scheduled' || i.status === 'pending').length || 0,
+    in_progress: statsData?.data?.filter((i: any) => i.status === 'in_progress' || i.status === 'approved').length || 0,
+    completed: statsData?.data?.filter((i: any) => i.status === 'completed').length || 0,
+  };
+
   return (
     <>
-      <div style={{ minHeight: '100%', background: W.gray50 }} className="page-enter">
+    <PullToRefresh onRefresh={handleRefresh}>
+      <div style={{ minHeight: '100%', background: W.gray50, paddingBottom: 80 }} className="page-enter">
         {/* Header */}
       <div style={{ ...stickyHeader }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -53,17 +72,19 @@ export const MaintenancePage: React.FC = () => {
           {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer' }}><X size={14} color={W.gray400} /></button>}
         </div>
 
-        {/* Status chips */}
-        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
-          {['', 'pending', 'approved', 'rejected', 'completed'].map((s) => {
-            const active = status === s;
-            return (
-              <button key={s} onClick={() => { setStatus(s); setPage(1); }}
-                style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: `1px solid ${active ? W.orange500 : W.gray200b}`, background: active ? W.orange500 : '#fff', color: active ? '#fff' : W.gray600, transition: 'all 0.12s' }}>
-                {s === '' ? 'All' : s}
-              </button>
-            );
-          })}
+        {/* Stats chips */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+          {[
+            { label: 'Total', val: stats.total, active: !status, onClick: () => { setStatus(''); setPage(1); }, activeBg: '#111827', activeText: '#fff', inactiveBg: '#fff', inactiveText: W.gray900 },
+            { label: 'Scheduled', val: stats.scheduled, active: status === 'scheduled', onClick: () => { setStatus(status === 'scheduled' ? '' : 'scheduled'); setPage(1); }, activeBg: '#2563eb', activeText: '#fff', inactiveBg: '#eff6ff', inactiveText: '#1d4ed8' },
+            { label: 'In Prog.', val: stats.in_progress, active: status === 'in_progress', onClick: () => { setStatus(status === 'in_progress' ? '' : 'in_progress'); setPage(1); }, activeBg: '#d97706', activeText: '#fff', inactiveBg: '#fefce8', inactiveText: '#b45309' },
+            { label: 'Completed', val: stats.completed, active: status === 'completed', onClick: () => { setStatus(status === 'completed' ? '' : 'completed'); setPage(1); }, activeBg: '#16a34a', activeText: '#fff', inactiveBg: '#f0fdf4', inactiveText: '#15803d' },
+          ].map(({ label, val, active, onClick, activeBg, activeText, inactiveBg, inactiveText }) => (
+            <button key={label} onClick={onClick} style={{ flex: '1 1 calc(25% - 5px)', minWidth: 70, padding: '8px 4px', borderRadius: 10, border: '1px solid', borderColor: active ? activeBg : W.gray100b, background: active ? activeBg : inactiveBg, textAlign: 'center', cursor: 'pointer', transition: 'all 0.15s' }}>
+              <p style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.8)' : inactiveText, marginBottom: 2 }}>{label}</p>
+              <p style={{ fontSize: 16, fontWeight: 700, color: active ? activeText : inactiveText }}>{val}</p>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -85,15 +106,16 @@ export const MaintenancePage: React.FC = () => {
             <div>
               {items.map((item, i) => {
                 const bb = STATUS_BADGE[item.status] || { background: W.gray100, color: W.gray600 };
+                const isCompleted = item.status === 'completed';
                 return (
-                  <div key={item.id} onClick={() => navigate(`/maintenance/${item.id}`)}
-                    style={{ padding: '13px 16px', cursor: 'pointer', borderTop: i > 0 ? `1px solid ${W.gray50}` : 'none', transition: 'background 0.1s' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = W.gray50)}
+                  <div key={item.id} onClick={() => { if (!isCompleted) navigate(`/maintenance/${item.id}`); }}
+                    style={{ padding: '13px 16px', cursor: isCompleted ? 'default' : 'pointer', borderTop: i > 0 ? `1px solid ${W.gray50}` : 'none', transition: 'background 0.1s', opacity: isCompleted ? 0.7 : 1 }}
+                    onMouseEnter={(e) => { if (!isCompleted) e.currentTarget.style.background = W.gray50; }}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
                       <p style={{ fontSize: 13, fontWeight: 600, color: W.gray900, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.4 }}>{item.maintenance_type || item.title || 'Maintenance'}</p>
-                      <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 20, flexShrink: 0, ...bb }}>{item.status}</span>
+                      <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 20, flexShrink: 0, textTransform: 'capitalize', ...bb }}>{item.status.replace('_', ' ')}</span>
                     </div>
                     {item.asset?.name && <p style={{ fontSize: 12, color: W.orange600, marginBottom: 4 }}>{item.asset.name}</p>}
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: W.gray400 }}>
@@ -121,6 +143,7 @@ export const MaintenancePage: React.FC = () => {
         style={{ position: 'fixed', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)', right: 20, width: 56, height: 56, background: 'linear-gradient(135deg,#f97316,#ef4444)', border: 'none', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 24px rgba(249,115,22,0.4)', cursor: 'pointer', zIndex: 100 }}>
         <Plus size={24} color="#fff" />
       </button>
+    </PullToRefresh>
     </>
   );
 };

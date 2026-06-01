@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { User } from '@/types';
 
 // Roles allowed to use this mobile app
-const ALLOWED_SLUGS = ['it_operations_staff', 'super-admin', 'super_admin', 'admin'];
+const ALLOWED_SLUGS = ['it_operations_staff', 'super-admin', 'super_admin', 'admin', 'manager'];
 
 interface AuthState {
   user: User | null;

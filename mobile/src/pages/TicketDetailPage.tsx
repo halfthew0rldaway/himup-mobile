@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, User, Tag, Building, Clock, MessageSquare, Send, Paperclip, CheckCircle, Loader2, Timer, UserCheck, FileText, Image } from 'lucide-react';
+import { ArrowLeft, User, Tag, Building, Clock, MessageSquare, Send, Paperclip, CheckCircle, Loader2, Timer, UserCheck, FileText, Image, Play } from 'lucide-react';
 import { ticketService } from '@/services';
 import { useAuthStore } from '@/store/auth.store';
 import { format, formatDistanceStrict } from 'date-fns';
@@ -15,7 +15,7 @@ const STATUS_INLINE: Record<string, { background: string; color: string }> = {
   in_progress: { background: '#dbeafe', color: '#1d4ed8' },
   resolved:    { background: '#f0fdf4', color: '#15803d' },
   closed:      { background: '#f3f4f6', color: '#374151' },
-  on_hold:     { background: '#fefce8', color: '#a16207' },
+  hold:        { background: '#fefce8', color: '#a16207' },
 };
 const PRIORITY_INLINE: Record<string, { background: string; color: string }> = {
   critical: { background: '#fef2f2', color: '#b91c1c' },
@@ -57,6 +57,13 @@ export const TicketDetailPage: React.FC = () => {
   const { user } = useAuthStore();
   const [comment, setComment] = useState('');
   const [elapsed, setElapsed] = useState(0);
+  const [localStopped, setLocalStopped] = useState(false);
+
+  // Hold / Resolution Modal States
+  const [holdModalOpen, setHoldModalOpen] = useState(false);
+  const [holdReason, setHoldReason] = useState('');
+  const [resolutionModalOpen, setResolutionModalOpen] = useState(false);
+  const [resolutionText, setResolutionText] = useState('');
 
   const { data: ticket, isLoading } = useQuery<Ticket>({
     queryKey: ['ticket', id],
@@ -65,14 +72,33 @@ export const TicketDetailPage: React.FC = () => {
     refetchInterval: 15000,
   });
 
-  // Live SLA timer — counts from created_at while not yet closed
+  // Live SLA timer — counts from created_at while not yet closed/resolved, deducting hold duration
   useEffect(() => {
-    if (!ticket || ticket.status === 'closed' || ticket.status === 'resolved') return;
-    const update = () => setElapsed(Date.now() - new Date(ticket.created_at).getTime());
+    if (!ticket || localStopped || ticket.status === 'closed' || ticket.status === 'resolved') return;
+    
+    const update = () => {
+      let holdMs = 0;
+      if (ticket.holds) {
+        ticket.holds.forEach((h: any) => {
+          if (h.started_at && h.ended_at) {
+            holdMs += new Date(h.ended_at).getTime() - new Date(h.started_at).getTime();
+          }
+        });
+      }
+      if (ticket.status === 'hold') {
+        const activeHold = ticket.active_hold || (ticket.holds && ticket.holds.find((h: any) => h.ended_at === null));
+        if (activeHold && activeHold.started_at) {
+          holdMs += Date.now() - new Date(activeHold.started_at).getTime();
+        }
+      }
+      const rawElapsed = Date.now() - new Date(ticket.created_at).getTime();
+      setElapsed(Math.max(0, rawElapsed - holdMs));
+    };
+
     update();
     const t = setInterval(update, 1000);
     return () => clearInterval(t);
-  }, [ticket?.created_at, ticket?.status]);
+  }, [ticket?.created_at, ticket?.status, ticket?.holds, ticket?.active_hold, localStopped]);
 
   const isActive = ticket?.status === 'in_progress';
   const slaLimit = ticket ? (SLA_MS[ticket.priority] ?? SLA_MS.medium) : 0;
@@ -80,25 +106,80 @@ export const TicketDetailPage: React.FC = () => {
   const isFinished = ticket?.status === 'closed' || ticket?.status === 'resolved';
   const slaBreached = elapsed > slaLimit && !isFinished;
 
-  const takeOwnershipMutation = useMutation({
-    mutationFn: () => ticketService.takeOwnership(Number(id), user!.id),
+
+
+  const holdMutation = useMutation({
+    mutationFn: (reason: string) => ticketService.hold(Number(id), reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ticket', id] });
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['tickets-stats'] });
+      setHoldModalOpen(false);
+      setHoldReason('');
     },
+    onError: (error: any) => {
+      const msg = error.response?.data?.message || error.message || 'Gagal menunda tiket';
+      alert(`Error: ${msg}`);
+    }
+  });
+
+  const resumeMutation = useMutation({
+    mutationFn: () => ticketService.resume(Number(id)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ticket', id] });
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['tickets-stats'] });
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data?.message || error.message || 'Gagal melanjutkan tiket';
+      alert(`Error: ${msg}`);
+    }
   });
 
   const statusMutation = useMutation({
-    mutationFn: (status: string) => ticketService.updateStatus(Number(id), status),
+    mutationFn: ({ status, resolution }: { status: string; resolution?: string }) => {
+      if (status === 'resolved') {
+        return ticketService.close(Number(id), resolution);
+      }
+      return ticketService.updateStatus(Number(id), status);
+    },
+    onMutate: ({ status }) => {
+      if (status === 'resolved' || status === 'closed') {
+        setLocalStopped(true);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ticket', id] });
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['tickets-stats'] });
+      setResolutionModalOpen(false);
+      setResolutionText('');
     },
+    onError: (error: any) => {
+      setLocalStopped(false);
+      const msg = error.response?.data?.message || error.message || 'Gagal memperbarui status';
+      alert(`Error: ${msg}`);
+    }
   });
 
   const commentMutation = useMutation({
-    mutationFn: (body: string) => ticketService.addComment(Number(id), body),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['ticket', id] }); setComment(''); },
+    mutationFn: async (body: string) => {
+      if (ticket?.status === 'open' && !ticket.pic) {
+        try {
+          await ticketService.takeOwnership(Number(id), user!.id);
+          await ticketService.updateStatus(Number(id), 'in_progress');
+        } catch (e) {
+          console.warn('Auto-assign failed', e);
+        }
+      }
+      return ticketService.addComment(Number(id), body);
+    },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ['ticket', id] }); 
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['tickets-stats'] });
+      setComment(''); 
+    },
   });
 
   const handleAttachment = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -121,9 +202,10 @@ export const TicketDetailPage: React.FC = () => {
   const next = NEXT[ticket.status];
   const comments = Array.isArray(ticket.comments) ? ticket.comments : [];
   const attachments = Array.isArray(ticket.attachments) ? ticket.attachments : [];
-  const canTakeOwnership = ticket.status === 'open' && !ticket.pic;
+
 
   return (
+    <>
     <div style={{ minHeight: '100%', background: W.gray50 }} className="page-enter">
       {/* Header */}
       <div style={{ ...stickyHeader, display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -168,50 +250,190 @@ export const TicketDetailPage: React.FC = () => {
             </div>
           )}
 
-          {/* Resolved/Closed resolution time */}
-          {isFinished && (ticket as any).closed_at && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, background: '#f0fdf4', borderRadius: 8, padding: '8px 12px' }}>
-              <CheckCircle size={13} color="#16a34a" />
-              <span style={{ fontSize: 12, color: '#15803d' }}>
-                Diselesaikan dalam {formatDistanceStrict(new Date(ticket.created_at), new Date((ticket as any).closed_at))}
-              </span>
-            </div>
-          )}
+          {/* Completed SLA summary */}
+          {isFinished && (() => {
+            const closedAt = (ticket as any).closed_at || ticket.updated_at;
+            let completedHoldMs = 0;
+            if (ticket.holds) {
+              ticket.holds.forEach((h: any) => {
+                if (h.started_at && h.ended_at) {
+                  completedHoldMs += new Date(h.ended_at).getTime() - new Date(h.started_at).getTime();
+                }
+              });
+            }
+            const rawResolveMs = closedAt ? new Date(closedAt).getTime() - new Date(ticket.created_at).getTime() : 0;
+            const resolveMs = Math.max(0, rawResolveMs - completedHoldMs);
+            const resolvePercent = slaLimit ? Math.min((resolveMs / slaLimit) * 100, 100) : 0;
+            const breached = resolveMs > slaLimit;
+            return (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <CheckCircle size={13} color={breached ? '#dc2626' : '#16a34a'} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: breached ? '#dc2626' : '#16a34a' }}>
+                      {breached ? 'SLA Terlampaui' : 'Selesai Dalam SLA'}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: breached ? '#dc2626' : '#15803d' }}>
+                    {formatMs(resolveMs)}
+                  </span>
+                </div>
+                <div style={{ height: 6, background: W.gray100, borderRadius: 99, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 99, width: `${resolvePercent}%`, background: breached ? '#dc2626' : resolvePercent > 80 ? '#f97316' : '#16a34a' }} />
+                </div>
+                <p style={{ fontSize: 11, color: W.gray400, marginTop: 4 }}>
+                  Batas SLA: {formatDistanceStrict(0, slaLimit)} · Diselesaikan: {closedAt ? format(new Date(closedAt), 'dd MMM yyyy · HH:mm') : '-'}
+                </p>
+              </div>
+            );
+          })()}
 
-          {/* Take Ownership */}
-          {canTakeOwnership && (
-            <button onClick={() => takeOwnershipMutation.mutate()} disabled={takeOwnershipMutation.isPending} className="press"
-              style={{ width: '100%', padding: '11px', background: '#7c3aed', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 12px rgba(124,58,237,0.3)', marginBottom: 10, opacity: takeOwnershipMutation.isPending ? 0.7 : 1 }}>
-              {takeOwnershipMutation.isPending ? <><Loader2 size={15} className="spin" /> Memproses…</> : <><UserCheck size={15} />Ambil Kepemilikan</>}
-            </button>
-          )}
+          {/* Action buttons */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
-          {/* Status action button */}
-          {next && (
-            <button onClick={() => statusMutation.mutate(next.next)} disabled={statusMutation.isPending} className="press"
-              style={{ width: '100%', padding: '11px', background: next.bg, border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: `0 4px 12px ${next.shadow}`, opacity: statusMutation.isPending ? 0.7 : 1 }}>
-              {statusMutation.isPending ? <><Loader2 size={15} className="spin" /> Memperbarui…</> : <><CheckCircle size={15} />{next.label}</>}
-            </button>
-          )}
+            {ticket.status === 'open' && ticket.pic && (
+              <button onClick={() => statusMutation.mutate({ status: 'in_progress' })} disabled={statusMutation.isPending} className="press"
+                style={{ width: '100%', padding: '11px', background: '#2563eb', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 12px rgba(37,99,235,0.3)', opacity: statusMutation.isPending ? 0.7 : 1 }}>
+                {statusMutation.isPending ? <><Loader2 size={15} className="spin" /> Memperbarui…</> : <><CheckCircle size={15} />Mulai Bekerja</>}
+              </button>
+            )}
+
+            {ticket.status === 'in_progress' && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setResolutionModalOpen(true)} disabled={statusMutation.isPending} className="press"
+                  style={{ flex: 2, padding: '11px', background: '#16a34a', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 12px rgba(22,163,74,0.3)', opacity: statusMutation.isPending ? 0.7 : 1 }}>
+                  <CheckCircle size={15} />Selesaikan Tiket
+                </button>
+                {user?.role && ['super-admin', 'manager'].includes(user.role.slug) && (
+                  <button onClick={() => setHoldModalOpen(true)} disabled={holdMutation.isPending} className="press"
+                    style={{ flex: 1, padding: '11px', background: '#eab308', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 4px 12px rgba(234,179,8,0.3)', opacity: holdMutation.isPending ? 0.7 : 1 }}>
+                    <Clock size={15} />Tunda
+                  </button>
+                )}
+              </div>
+            )}
+
+            {ticket.status === 'hold' && (
+              <div>
+                {user?.role && ['super-admin', 'manager'].includes(user.role.slug) ? (
+                  <button onClick={() => resumeMutation.mutate()} disabled={resumeMutation.isPending} className="press"
+                    style={{ width: '100%', padding: '11px', background: '#2563eb', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 12px rgba(37,99,235,0.3)', opacity: resumeMutation.isPending ? 0.7 : 1 }}>
+                    {resumeMutation.isPending ? <><Loader2 size={15} className="spin" /> Melanjutkan…</> : <><Play size={15} /> Lanjutkan Tiket</>}
+                  </button>
+                ) : (
+                  <div style={{ padding: '10px 12px', background: '#fefce8', border: '1px solid #fef3c7', borderRadius: 8, fontSize: 13, color: '#a16207', textAlign: 'center', fontWeight: 500 }}>
+                    Tiket sedang ditangguhkan. Hanya Admin/Manager yang dapat melanjutkan.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Info */}
-        <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${W.gray100b}`, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', padding: 14 }}>
-          <p style={sectionLabel}>Detail</p>
-          {[
-            { icon: User,     label: 'Requester',   val: ticket.requester?.name },
-            { icon: UserCheck,label: 'Ditugaskan',  val: ticket.pic?.name || '— Belum ada —' },
-            { icon: Tag,      label: 'Kategori',    val: ticket.category?.name },
-            { icon: Building, label: 'Branch',      val: ticket.branch?.name },
-            { icon: Clock,    label: 'Dibuat',      val: ticket.created_at ? format(new Date(ticket.created_at), 'dd MMM yyyy · HH:mm') : '' },
-          ].filter(i => i.val).map(({ icon: Icon, label, val }) => (
-            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <Icon size={14} color={W.gray400} style={{ flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: W.gray500, width: 80, flexShrink: 0 }}>{label}</span>
-              <span style={{ fontSize: 13, color: W.gray700, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val}</span>
-            </div>
-          ))}
+        {/* Info — matches web app detail panel */}
+        <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${W.gray100b}`, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+          <div style={{ padding: '12px 14px', borderBottom: `1px solid ${W.gray50}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Clock size={14} color={W.gray400} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: W.gray900 }}>Detail</span>
+          </div>
+          <div>
+            {[
+              { icon: <div style={{ width: 8, height: 8, borderRadius: '50%', background: st.color, flexShrink: 0 }} />, label: 'Status', val: <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 20, ...st, textTransform: 'capitalize' as const }}>{ticket.status.replace('_', ' ')}</span> },
+              { icon: <Tag size={14} color={W.gray400} />, label: 'Prioritas', val: <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 20, ...pr, textTransform: 'capitalize' as const }}>{ticket.priority}</span> },
+              { icon: <Tag size={14} color={W.gray400} />, label: 'Kategori', val: <span style={{ fontSize: 12, color: W.gray700 }}>{ticket.category?.name || '-'}</span> },
+              { icon: <User size={14} color={W.gray400} />, label: 'Pelapor', val: (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'linear-gradient(135deg,#f97316,#ef4444)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                    {ticket.requester?.name?.[0]?.toUpperCase() || '?'}
+                  </div>
+                  <span style={{ fontSize: 12, color: W.gray700 }}>{ticket.requester?.name || '-'}</span>
+                </div>
+              )},
+              { icon: <UserCheck size={14} color="#3b82f6" />, label: 'PIC', val: (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {ticket.pic ? (
+                    <>
+                      <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                        {ticket.pic.name?.[0]?.toUpperCase() || '?'}
+                      </div>
+                      <span style={{ fontSize: 12, color: W.gray700 }}>{ticket.pic.name}</span>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: 12, color: W.gray400, fontStyle: 'italic' }}>Belum ada</span>
+                  )}
+                </div>
+              )},
+              ...(ticket.branch ? [{ icon: <Building size={14} color={W.gray400} />, label: 'Cabang', val: <span style={{ fontSize: 12, color: W.gray700 }}>{ticket.branch.name}</span> }] : []),
+              ...((ticket as any).asset ? [{ icon: <Tag size={14} color="#8b5cf6" />, label: 'Aset', val: (
+                <div style={{ textAlign: 'right' as const }}>
+                  <div style={{ fontSize: 12, color: W.gray700, fontWeight: 500 }}>{(ticket as any).asset.name}</div>
+                  <div style={{ fontSize: 11, color: W.gray400, fontFamily: 'monospace' }}>{(ticket as any).asset.asset_tag}</div>
+                </div>
+              )}] : []),
+              { icon: <Clock size={14} color={W.gray400} />, label: 'Dibuat', val: <span style={{ fontSize: 12, color: W.gray500 }}>{ticket.created_at ? format(new Date(ticket.created_at), 'dd MMM yyyy · HH:mm') : '-'}</span> },
+              ...(isFinished ? [{ icon: <Clock size={14} color={W.gray400} />, label: 'Ditutup', val: <span style={{ fontSize: 12, color: W.gray500 }}>{(ticket as any).closed_at ? format(new Date((ticket as any).closed_at), 'dd MMM yyyy · HH:mm') : format(new Date(ticket.updated_at), 'dd MMM yyyy · HH:mm')}</span> }] : []),
+            ].map((row, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: `1px solid ${W.gray50}`, gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  {row.icon}
+                  <span style={{ fontSize: 12, color: W.gray500 }}>{row.label}</span>
+                </div>
+                <div style={{ minWidth: 0 }}>{row.val}</div>
+              </div>
+            ))}
+          </div>
         </div>
+
+        {/* Total Waktu Penanganan — shows for closed tickets, deducting hold time */}
+        {isFinished && (() => {
+          const closedAt = (ticket as any).closed_at || ticket.updated_at;
+          let completedHoldMs = 0;
+          if (ticket.holds) {
+            ticket.holds.forEach((h: any) => {
+              if (h.started_at && h.ended_at) {
+                completedHoldMs += new Date(h.ended_at).getTime() - new Date(h.started_at).getTime();
+              }
+            });
+          }
+          const rawTotalMs = closedAt ? new Date(closedAt).getTime() - new Date(ticket.created_at).getTime() : 0;
+          const totalMs = Math.max(0, rawTotalMs - completedHoldMs);
+          const totalSec = Math.floor(totalMs / 1000);
+          const hh = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+          const mm = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+          const ss = String(totalSec % 60).padStart(2, '0');
+          return (
+            <div style={{ background: '#f8fafc', borderRadius: 12, border: `1px solid ${W.gray100b}`, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', padding: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <Timer size={14} color={W.gray500} />
+                <span style={{ fontSize: 12, color: W.gray500 }}>Total Waktu Penanganan</span>
+              </div>
+              <span style={{ fontSize: 20, fontWeight: 700, fontFamily: 'monospace', color: W.gray900 }}>{hh}:{mm}:{ss}</span>
+            </div>
+          );
+        })()}
+
+        {/* Resolution details */}
+        {isFinished && (ticket as any).resolution && (
+          <div style={{ background: '#f0fdf4', borderRadius: 12, border: '1px solid #dcfce7', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', padding: 14 }}>
+            <p style={{ ...sectionLabel, color: '#16a34a', marginBottom: 6 }}>Resolusi / Solusi</p>
+            <p style={{ fontSize: 13, color: '#15803d', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{(ticket as any).resolution}</p>
+          </div>
+        )}
+
+        {/* Branch address card */}
+        {ticket.branch && (ticket.branch as any).address && (
+          <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${W.gray100b}`, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', padding: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: W.orange100, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Building size={16} color={W.orange600} />
+              </div>
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 600, color: W.gray900 }}>{ticket.branch.name}</p>
+                <p style={{ fontSize: 11, color: W.gray500, marginTop: 2, lineHeight: 1.5 }}>{(ticket.branch as any).address}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Description */}
         {ticket.description && (
@@ -314,5 +536,73 @@ export const TicketDetailPage: React.FC = () => {
         </div>
       </div>
     </div>
+
+    {/* Hold Modal — Quick Presets for Field Staff */}
+    {holdModalOpen && (
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+        <div className="page-enter" style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 400, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)', overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: `1px solid ${W.gray100b}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: W.gray900 }}>Tunda Tiket (Hold)</h3>
+            <button onClick={() => setHoldModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: 22, color: W.gray400, cursor: 'pointer', lineHeight: 1 }}>&times;</button>
+          </div>
+          <div style={{ padding: 20 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: W.gray700, marginBottom: 8 }}>Pilih Alasan Cepat:</label>
+            
+            {/* Quick-tap presets for deployment engineers */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+              {[
+                'Menunggu spare part',
+                'Menunggu konfirmasi vendor',
+                'Menunggu feedback user',
+                'Jadwal pemeliharaan berkala',
+              ].map(preset => (
+                <button key={preset} type="button" onClick={() => setHoldReason(preset)}
+                  style={{ padding: '6px 12px', fontSize: 11, fontWeight: 500, background: holdReason === preset ? '#fff7ed' : W.gray50, border: `1px solid ${holdReason === preset ? W.orange500 : W.gray200b}`, borderRadius: 20, color: holdReason === preset ? W.orange600 : W.gray600, cursor: 'pointer', transition: 'all 0.12s' }}>
+                  {preset}
+                </button>
+              ))}
+            </div>
+
+            <textarea value={holdReason} onChange={(e) => setHoldReason(e.target.value)} rows={3} placeholder="Tulis alasan penangguhan tambahan secara detail..."
+              style={{ width: '100%', background: W.gray50, border: `1px solid ${W.gray200b}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: W.gray900, outline: 'none', resize: 'none' }} />
+            
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              <button onClick={() => setHoldModalOpen(false)} style={{ flex: 1, padding: '10px', background: W.gray100, border: 'none', borderRadius: 8, color: W.gray700, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Batal</button>
+              <button onClick={() => holdMutation.mutate(holdReason)} disabled={!holdReason.trim() || holdMutation.isPending}
+                style={{ flex: 1, padding: '10px', background: '#eab308', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: !holdReason.trim() || holdMutation.isPending ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                {holdMutation.isPending ? <Loader2 size={14} className="spin" /> : null} Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Resolution Modal — Quick Resolution Input for Deployment Staff */}
+    {resolutionModalOpen && (
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+        <div className="page-enter" style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 400, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)', overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: `1px solid ${W.gray100b}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: W.gray900 }}>Selesaikan Tiket</h3>
+            <button onClick={() => setResolutionModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: 22, color: W.gray400, cursor: 'pointer', lineHeight: 1 }}>&times;</button>
+          </div>
+          <div style={{ padding: 20 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: W.gray700, marginBottom: 8 }}>Detail Penyelesaian / Solusi *</label>
+            
+            <textarea value={resolutionText} onChange={(e) => setResolutionText(e.target.value)} rows={4} placeholder="Tuliskan tindakan/solusi penanganan masalah..."
+              style={{ width: '100%', background: W.gray50, border: `1px solid ${W.gray200b}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: W.gray900, outline: 'none', resize: 'none' }} />
+            
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              <button onClick={() => setResolutionModalOpen(false)} style={{ flex: 1, padding: '10px', background: W.gray100, border: 'none', borderRadius: 8, color: W.gray700, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Batal</button>
+              <button onClick={() => statusMutation.mutate({ status: 'resolved', resolution: resolutionText })} disabled={!resolutionText.trim() || statusMutation.isPending}
+                style={{ flex: 1, padding: '10px', background: '#16a34a', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: !resolutionText.trim() || statusMutation.isPending ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                {statusMutation.isPending ? <Loader2 size={14} className="spin" /> : null} Selesai
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };

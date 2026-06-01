@@ -1,77 +1,85 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ScanLine, Camera as CameraIcon, X, Loader2 } from 'lucide-react';
-import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { ArrowLeft, Loader2, X } from 'lucide-react';
+import { Camera } from '@capacitor/camera';
 import { assetService } from '@/services';
-
-// Decode QR/barcode from an image data URL using html5-qrcode's file-based decoder
-async function decodeFromDataUrl(dataUrl: string): Promise<string> {
-  const { Html5Qrcode } = await import('html5-qrcode');
-  return new Promise((resolve, reject) => {
-    // Convert dataUrl to File blob for html5-qrcode's file-based API
-    fetch(dataUrl)
-      .then(r => r.blob())
-      .then(blob => {
-        const file = new File([blob], 'scan.jpg', { type: 'image/jpeg' });
-        const reader = new Html5Qrcode('__decode_dummy__', { verbose: false });
-        reader.scanFile(file, false)
-          .then((result: string) => { reader.clear(); resolve(result); })
-          .catch((e: any) => { reader.clear(); reject(e); });
-      })
-      .catch(reject);
-  });
-}
+import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
 
 export const AssetScannerPage: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [manualInput, setManualInput] = useState('');
-  const [preview, setPreview] = useState<string | null>(null);
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const controlsRef = useRef<IScannerControls | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
 
-  const handleScan = async () => {
-    setError('');
-    setLoading(true);
-    try {
-      const perm = await Camera.requestPermissions({ permissions: ['camera'] });
-      if (perm.camera !== 'granted') {
-        setError('Izin kamera ditolak. Aktifkan di Settings > App > HiMup Field.');
-        setLoading(false);
-        return;
-      }
+  useEffect(() => {
+    let mounted = true;
 
-      const photo = await Camera.getPhoto({
-        quality: 90,
-        allowEditing: false,
-        resultType: CameraResultType.DataUrl,
-        source: CameraSource.Camera,
-        correctOrientation: true,
-      });
-
-      if (!photo.dataUrl) throw new Error('No image captured');
-      setPreview(photo.dataUrl);
-
-      let tag: string;
+    const startScanner = async () => {
       try {
-        tag = await decodeFromDataUrl(photo.dataUrl);
-      } catch {
-        setError('Tidak bisa membaca kode dari gambar ini. Coba lagi atau masukkan kode secara manual.');
-        setLoading(false);
-        return;
-      }
+        const perm = await Camera.requestPermissions({ permissions: ['camera'] });
+        if (perm.camera !== 'granted') {
+          setError('Izin kamera ditolak. Aktifkan di Settings > App > HiMup Field.');
+          return;
+        }
 
-      await handleFound(tag);
-    } catch (e: any) {
-      if (!e?.message?.includes('User cancelled')) {
-        setError(e?.message || 'Kamera gagal dibuka.');
-      }
-      setLoading(false);
-    }
-  };
+        if (!mounted) return;
 
-  const handleFound = async (tag: string) => {
+        const videoElement = videoRef.current;
+        if (!videoElement) return;
+
+        const codeReader = new BrowserMultiFormatReader();
+        controlsRef.current = await codeReader.decodeFromConstraints(
+          { 
+            audio: false, 
+            video: { 
+              facingMode: "environment",
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            } 
+          },
+          videoElement,
+          (result, error) => {
+            if (result) {
+              if (controlsRef.current) {
+                controlsRef.current.stop();
+              }
+              handleFound(result.getText());
+            }
+          }
+        );
+        setIsScanning(true);
+      } catch (err: any) {
+        setError(err?.message || 'Gagal memulai kamera langsung.');
+      }
+    };
+
+    startScanner();
+
+    return () => {
+      mounted = false;
+      if (controlsRef.current) {
+        controlsRef.current.stop();
+      }
+    };
+  }, []);
+
+  const handleFound = async (rawTag: string) => {
     setLoading(true);
     setError('');
+    
+    // Extract asset tag if the scanned string is a URL (e.g., from QR Code)
+    let tag = rawTag;
+    if (tag.includes('/asset/')) {
+      const parts = tag.split('/asset/');
+      if (parts.length > 1) {
+        tag = parts[1].split('/')[0];
+      }
+    }
+
     try {
       const data = await assetService.getByTag(tag);
       const asset = data?.data?.[0] || (Array.isArray(data) ? data[0] : null);
@@ -80,6 +88,7 @@ export const AssetScannerPage: React.FC = () => {
       } else {
         setError(`Tidak ditemukan aset dengan tag: "${tag}"`);
         setLoading(false);
+        // Resume scanning if not found? Might be good, but currently it stops.
       }
     } catch {
       setError('Pencarian gagal. Coba lagi.');
@@ -90,7 +99,7 @@ export const AssetScannerPage: React.FC = () => {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#0f172a' }}>
       {/* Header */}
-      <div style={{ background: 'rgba(15,23,42,0.97)', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingTop: 'env(safe-area-inset-top, 36px)' }}>
+      <div style={{ background: 'rgba(15,23,42,0.97)', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingTop: 'env(safe-area-inset-top, 36px)', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px' }}>
           <button onClick={() => navigate(-1)} style={{ width: 36, height: 36, background: 'rgba(30,41,59,0.9)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
             <ArrowLeft size={18} color="#94a3b8" />
@@ -99,45 +108,49 @@ export const AssetScannerPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Main area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', gap: 24 }}>
-
-        {/* Preview of captured image */}
-        {preview && (
-          <div style={{ position: 'relative', width: 200, height: 200, borderRadius: 12, overflow: 'hidden', border: '2px solid rgba(249,115,22,0.4)' }}>
-            <img src={preview} alt="scan preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            <button onClick={() => setPreview(null)} style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-              <X size={13} color="#fff" />
-            </button>
+      {/* Main area - Camera View */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+        
+        {loading ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0f172a' }}>
+            <Loader2 size={40} color="#f97316" className="spin" style={{ marginBottom: 16 }} />
+            <p style={{ color: '#94a3b8', fontSize: 15, fontWeight: 500 }}>Memproses data aset...</p>
           </div>
-        )}
+        ) : (
+          <>
+            <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay playsInline muted></video>
+            
+            {/* Overlay */}
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ textAlign: 'center', position: 'absolute', top: 40 }}>
+                <p style={{ color: '#fff', fontSize: 16, fontWeight: 600, textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>Arahkan kamera ke QR Code</p>
+                <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 4, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>Pemindaian akan dilakukan secara otomatis</p>
+              </div>
+              
+              {/* Target box for visual guidance */}
+              <div style={{ width: 250, height: 250, border: '2px solid rgba(255,255,255,0.5)', borderRadius: 24, position: 'relative' }}>
+                <div style={{ position: 'absolute', top: -2, left: -2, width: 40, height: 40, borderTop: '4px solid #f97316', borderLeft: '4px solid #f97316', borderRadius: '24px 0 0 0' }}></div>
+                <div style={{ position: 'absolute', top: -2, right: -2, width: 40, height: 40, borderTop: '4px solid #f97316', borderRight: '4px solid #f97316', borderRadius: '0 24px 0 0' }}></div>
+                <div style={{ position: 'absolute', bottom: -2, left: -2, width: 40, height: 40, borderBottom: '4px solid #f97316', borderLeft: '4px solid #f97316', borderRadius: '0 0 0 24px' }}></div>
+                <div style={{ position: 'absolute', bottom: -2, right: -2, width: 40, height: 40, borderBottom: '4px solid #f97316', borderRight: '4px solid #f97316', borderRadius: '0 0 24px 0' }}></div>
+              </div>
 
-        {!preview && (
-          <div style={{ width: 120, height: 120, background: 'rgba(30,41,59,0.9)', borderRadius: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(249,115,22,0.15)' }}>
-            <ScanLine size={52} color="rgba(249,115,22,0.5)" />
-          </div>
-        )}
-
-        <div style={{ textAlign: 'center' }}>
-          <p style={{ color: '#f1f5f9', fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Scan barcode / QR code aset</p>
-          <p style={{ color: '#64748b', fontSize: 13 }}>Ambil foto label aset menggunakan kamera</p>
-        </div>
-
-        <button onClick={handleScan} disabled={loading}
-          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 32px', background: loading ? 'rgba(249,115,22,0.4)' : 'linear-gradient(135deg,#f97316,#ea580c)', border: 'none', borderRadius: 14, color: '#fff', fontSize: 16, fontWeight: 700, cursor: loading ? 'default' : 'pointer', boxShadow: '0 8px 24px rgba(249,115,22,0.3)' }}>
-          {loading ? <><Loader2 size={20} className="spin" /> Memproses…</> : <><CameraIcon size={20} />Buka Kamera</>}
-        </button>
-
-        {error && (
-          <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%', maxWidth: 360 }}>
-            <p style={{ fontSize: 13, color: '#fca5a5', flex: 1 }}>{error}</p>
-            <button onClick={() => setError('')} style={{ background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}><X size={14} color="#f87171" /></button>
-          </div>
+              {error && (
+                <div style={{ position: 'absolute', bottom: 40, background: 'rgba(239,68,68,0.9)', borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '90%', maxWidth: 360, pointerEvents: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+                  <p style={{ fontSize: 13, color: '#fff', flex: 1 }}>{error}</p>
+                  <button onClick={() => {
+                    setError('');
+                    // Optionally restart scanning here if needed
+                  }} style={{ background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}><X size={14} color="#fff" /></button>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 
       {/* Manual input */}
-      <div style={{ background: '#0f172a', borderTop: '1px solid rgba(255,255,255,0.06)', padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+      <div style={{ background: '#0f172a', borderTop: '1px solid rgba(255,255,255,0.06)', padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))', zIndex: 10 }}>
         <p style={{ color: '#475569', fontSize: 12, marginBottom: 8, textAlign: 'center' }}>Atau masukkan kode aset secara manual</p>
         <div style={{ display: 'flex', gap: 8 }}>
           <input
@@ -146,6 +159,7 @@ export const AssetScannerPage: React.FC = () => {
             placeholder="Contoh: AST-LTP-001"
             style={{ flex: 1, background: 'rgba(30,41,59,0.8)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '12px 14px', fontSize: 15, color: '#f8fafc', outline: 'none' }}
             onKeyDown={(e) => { if (e.key === 'Enter' && manualInput.trim()) handleFound(manualInput.trim()); }}
+            disabled={loading}
           />
           <button
             onClick={() => { if (manualInput.trim()) handleFound(manualInput.trim()); }}
@@ -155,9 +169,6 @@ export const AssetScannerPage: React.FC = () => {
           </button>
         </div>
       </div>
-
-      {/* Hidden div for html5-qrcode decode */}
-      <div id="__decode_dummy__" style={{ display: 'none' }} />
     </div>
   );
 };

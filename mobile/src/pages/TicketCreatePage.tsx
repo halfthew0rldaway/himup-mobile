@@ -53,8 +53,8 @@ export const TicketCreatePage: React.FC = () => {
     mutationFn: () => ticketService.create({ 
       title, 
       description, 
-      asset_id: assetId ? Number(assetId) : undefined, 
-      branch_id: branchId ? Number(branchId) : undefined,
+      asset_id: prefilledAssetId ? Number(prefilledAssetId) : (assetId ? Number(assetId) : undefined), 
+      branch_id: prefilledAssetId && prefilledAsset?.branch_id ? Number(prefilledAsset.branch_id) : (branchId ? Number(branchId) : undefined),
       category_id: categoryId ? Number(categoryId) : undefined,
       priority,
       status: 'open'
@@ -65,7 +65,14 @@ export const TicketCreatePage: React.FC = () => {
     },
   });
 
-  const canSubmit = title.trim() && branchId && !mutation.isPending;
+  const canSubmit = title.trim() && (prefilledAssetId ? true : branchId) && !mutation.isPending;
+
+  // Fetch prefilled asset details if we came from an asset detail page
+  const { data: prefilledAsset, isLoading: isLoadingPrefilled } = useQuery({
+    queryKey: ['asset', prefilledAssetId],
+    queryFn: () => assetService.getOne(Number(prefilledAssetId)),
+    enabled: !!prefilledAssetId,
+  });
 
   return (
     <div style={{ minHeight: '100%', background: W.gray50 }} className="page-enter">
@@ -93,15 +100,45 @@ export const TicketCreatePage: React.FC = () => {
               <input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="What's the issue?" style={inputStyle} />
             </div>
 
-            <div>
-              <label style={labelStyle}>Branch *</label>
-              <select value={branchId} onChange={(e) => setBranchId(e.target.value)} required style={inputStyle}>
-                <option value="">Select branch...</option>
-                {branchesData?.data?.map((b: any) => (
-                  <option key={b.id} value={b.id}>{b.nama_branch || b.name}</option>
-                ))}
-              </select>
-            </div>
+            {prefilledAssetId ? (
+              <div style={{ background: '#f8fafc', borderRadius: 8, border: `1px solid ${W.gray200b}`, padding: 12 }}>
+                <label style={labelStyle}>Selected Asset</label>
+                {isLoadingPrefilled ? (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <Loader2 size={16} className="spin" color={W.gray500} />
+                    <span style={{ fontSize: 13, color: W.gray500 }}>Loading asset data...</span>
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{ fontSize: 14, fontWeight: 600, color: W.gray900 }}>{prefilledAsset?.name}</p>
+                    <p style={{ fontSize: 12, color: W.gray500, marginTop: 2 }}>
+                      {prefilledAsset?.asset_tag} &bull; {prefilledAsset?.branch?.name || prefilledAsset?.branch?.nama_branch}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label style={labelStyle}>Branch *</label>
+                  <select value={branchId} onChange={(e) => setBranchId(e.target.value)} required style={inputStyle}>
+                    <option value="">Select branch...</option>
+                    {branchesData?.data?.map((b: any) => (
+                      <option key={b.id} value={b.id}>{b.nama_branch || b.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Related Asset (Optional)</label>
+                  <select value={assetId} onChange={(e) => setAssetId(e.target.value)} style={inputStyle}>
+                    <option value="">No specific asset</option>
+                    {assetsData?.data?.map((a: any) => (
+                      <option key={a.id} value={a.id}>{a.name} ({a.asset_tag})</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
@@ -124,15 +161,7 @@ export const TicketCreatePage: React.FC = () => {
               </div>
             </div>
 
-            <div>
-              <label style={labelStyle}>Related Asset (Optional)</label>
-              <select value={assetId} onChange={(e) => setAssetId(e.target.value)} style={inputStyle}>
-                <option value="">No specific asset</option>
-                {assetsData?.data?.map((a: any) => (
-                  <option key={a.id} value={a.id}>{a.name} ({a.asset_tag})</option>
-                ))}
-              </select>
-            </div>
+
 
             <div>
               <label style={labelStyle}>Detailed Description</label>

@@ -22,8 +22,8 @@ export const useTicketNotifications = () => {
       // importance: 5 = IMPORTANCE_HIGH → shows as heads-up overlay popup
       await LocalNotifications.createChannel({
         id: 'himup_tickets',
-        name: 'New Tickets',
-        description: 'Notifications for new IT support tickets',
+        name: 'Tiket Baru',
+        description: 'Notifikasi untuk tiket IT support baru',
         importance: 5,
         visibility: 1,
         vibration: true,
@@ -51,7 +51,7 @@ export const useTicketNotifications = () => {
             await LocalNotifications.schedule({
               notifications: [
                 {
-                  title: '🔔 New Ticket Incoming',
+                  title: '🔔 Tiket Baru Masuk',
                   body: `[${(ticket.priority || 'LOW').toUpperCase()}] ${ticket.ticket_number}: ${ticket.title}`,
                   id: ticket.id % 2147483647, // must be within int32 range
                   schedule: { at: new Date(Date.now() + 500) },

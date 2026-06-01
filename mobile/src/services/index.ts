@@ -43,6 +43,15 @@ export const ticketService = {
   updateStatus: (id: number, status: string) =>
     api.patch(`/tickets/${id}/status`, { status }).then((r) => r.data),
 
+  close: (id: number, resolution?: string) =>
+    api.post(`/tickets/${id}/close`, { resolution }).then((r) => r.data),
+
+  hold: (id: number, reason?: string) =>
+    api.post(`/tickets/${id}/hold`, { reason }).then((r) => r.data),
+
+  resume: (id: number) =>
+    api.post(`/tickets/${id}/resume`).then((r) => r.data),
+
   takeOwnership: (id: number, picId: number) =>
     api.post(`/tickets/${id}/assign`, { pic_id: picId }).then((r) => r.data),
 
@@ -89,10 +98,13 @@ export const maintenanceService = {
     api.post(`/asset-maintenances/${id}/approve`).then((r) => r.data),
 
   reject: (id: number, reason?: string) =>
-    api.post(`/asset-maintenances/${id}/reject`, { reason }).then((r) => r.data),
+    api.post(`/asset-maintenances/${id}/reject`, { rejection_reason: reason }).then((r) => r.data),
 
-  complete: (id: number) =>
-    api.post(`/asset-maintenances/${id}/complete`).then((r) => r.data),
+  complete: (id: number, cost?: number, notes?: string) =>
+    api.put(`/asset-maintenances/${id}`, { status: 'completed', cost, notes }).then((r) => r.data),
+
+  updateStatus: (id: number, status: string) =>
+    api.put(`/asset-maintenances/${id}`, { status }).then((r) => r.data),
 };
 
 export const notificationService = {

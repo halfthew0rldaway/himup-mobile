@@ -33,3 +33,20 @@ npm-debug.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+.idea/
+.vscode/
+
+# Temp dev files
+.codex
+test_api.*
+build_error.txt
+*.apk
+*.idsig
+
+# Unrelated project docs / presentations
+PRESENTASI/
+*.txt
+*.png
+*.jpeg
+*.jpg
+

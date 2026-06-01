@@ -15,7 +15,7 @@ const IS_DEMO_MODE = false;
 if (IS_DEMO_MODE) {
   // All fake data lives here — never leaks into the live build
   let fakeTickets: any[] = [
-    { id: 6, ticket_number: 'TCK-2026-006', title: 'Monitor screen flickering', description: 'My secondary display is flickering constantly.', priority: 'low', status: 'on_hold', created_at: new Date(Date.now() - 400000000).toISOString(), category: { name: 'Hardware' }, requester: { name: 'John Doe' }, pic: { name: 'Demo Engineer' }, branch: { name: 'HQ' } },
+    { id: 6, ticket_number: 'TCK-2026-006', title: 'Monitor screen flickering', description: 'My secondary display is flickering constantly.', priority: 'low', status: 'hold', created_at: new Date(Date.now() - 400000000).toISOString(), category: { name: 'Hardware' }, requester: { name: 'John Doe' }, pic: { name: 'Demo Engineer' }, branch: { name: 'HQ' } },
     { id: 5, ticket_number: 'TCK-2026-005', title: 'VPN connection dropping', description: 'Users in remote office complain about VPN drops.', priority: 'high', status: 'in_progress', created_at: new Date(Date.now() - 7200000).toISOString(), category: { name: 'Network' }, requester: { name: 'Remote User' }, pic: { name: 'Demo Engineer' }, branch: { name: 'Remote' } },
     { id: 4, ticket_number: 'TCK-2026-004', title: 'New laptop setup', description: 'Please setup the new MacBook for the incoming hire.', priority: 'low', status: 'open', created_at: new Date(Date.now() - 3600000).toISOString(), category: { name: 'Hardware' }, requester: { name: 'HR Dept' }, pic: null, branch: { name: 'HQ' } },
     { id: 3, ticket_number: 'TCK-2026-003', title: 'Server upgrade needed', description: 'We need to upgrade the RAM on the main DB server.', priority: 'critical', status: 'closed', created_at: new Date(Date.now() - 172800000).toISOString(), updated_at: new Date(Date.now() - 100000000).toISOString(), category: { name: 'Server' }, requester: { name: 'Admin' }, pic: { name: 'SysAdmin' }, branch: { name: 'Data Center' }, comments: [{ id: 2, body: 'Approved.', created_at: new Date().toISOString(), user: { name: 'Manager' } }] },
@@ -92,16 +92,90 @@ if (IS_DEMO_MODE) {
         return { data: { message: 'Comment added' }, status: 200, statusText: 'OK', headers: {}, config, request: {} };
       }
 
+      // POST: resolve / close
+      const resolveMatch = path.match(/\/tickets\/(\d+)\/(resolve|close)/);
+      if (method === 'post' && resolveMatch) {
+        const ticket = fakeTickets.find(t => t.id === Number(resolveMatch[1]));
+        if (ticket) { 
+          ticket.status = 'resolved'; 
+          ticket.updated_at = new Date().toISOString();
+          (ticket as any).closed_at = new Date().toISOString();
+          const body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {};
+          if (body.resolution) {
+            ticket.resolution = body.resolution;
+          }
+        }
+        return { data: { message: 'Ticket resolved' }, status: 200, statusText: 'OK', headers: {}, config, request: {} };
+      }
+
+      // POST: hold
+      const holdMatch = path.match(/\/tickets\/(\d+)\/hold/);
+      if (method === 'post' && holdMatch) {
+        const ticket = fakeTickets.find(t => t.id === Number(holdMatch[1]));
+        if (ticket) {
+          ticket.status = 'hold';
+          ticket.updated_at = new Date().toISOString();
+          const body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {};
+          const userStr = localStorage.getItem('himup-mobile-auth');
+          let userName = 'Demo Admin';
+          let userId = 1;
+          try {
+            const authObj = JSON.parse(userStr || '{}');
+            userName = authObj.state?.user?.name || userName;
+            userId = authObj.state?.user?.id || userId;
+          } catch {}
+          
+          if (!ticket.holds) ticket.holds = [];
+          const newHold = {
+            id: Date.now(),
+            ticket_id: ticket.id,
+            reason: body.reason || 'No reason provided',
+            held_by_user_id: userId,
+            started_at: new Date().toISOString(),
+            ended_at: null,
+            held_by_user: { id: userId, name: userName }
+          };
+          ticket.holds.push(newHold);
+          ticket.active_hold = newHold;
+        }
+        return { data: { ticket }, status: 200, statusText: 'OK', headers: {}, config, request: {} };
+      }
+
+      // POST: resume
+      const resumeMatch = path.match(/\/tickets\/(\d+)\/resume/);
+      if (method === 'post' && resumeMatch) {
+        const ticket = fakeTickets.find(t => t.id === Number(resumeMatch[1]));
+        if (ticket) {
+          ticket.status = 'in_progress';
+          ticket.updated_at = new Date().toISOString();
+          if (ticket.holds) {
+            const activeHold = ticket.holds.find((h: any) => h.ended_at === null);
+            if (activeHold) {
+              activeHold.ended_at = new Date().toISOString();
+            }
+          }
+          ticket.active_hold = null;
+        }
+        return { data: ticket, status: 200, statusText: 'OK', headers: {}, config, request: {} };
+      }
+
       // PATCH: status
       const statusMatch = path.match(/\/tickets\/(\d+)\/status/);
       if (method === 'patch' && statusMatch) {
         const ticket = fakeTickets.find(t => t.id === Number(statusMatch[1]));
-        if (ticket) { ticket.status = typeof config.data === 'string' ? JSON.parse(config.data).status : config.data?.status; ticket.updated_at = new Date().toISOString(); }
+        if (ticket) {
+          const newStatus = typeof config.data === 'string' ? JSON.parse(config.data).status : config.data?.status;
+          ticket.status = newStatus;
+          ticket.updated_at = new Date().toISOString();
+          if (newStatus === 'resolved' || newStatus === 'closed') {
+            (ticket as any).closed_at = new Date().toISOString();
+          }
+        }
         return { data: { message: 'Status updated' }, status: 200, statusText: 'OK', headers: {}, config, request: {} };
       }
 
-      // POST: take ownership
-      const ownershipMatch = path.match(/\/tickets\/(\d+)\/take-ownership/);
+      // POST: take ownership / assign
+      const ownershipMatch = path.match(/\/tickets\/(\d+)\/(take-ownership|assign)/);
       if (method === 'post' && ownershipMatch) {
         const ticket = fakeTickets.find(t => t.id === Number(ownershipMatch[1]));
         let userName = 'Demo Engineer';
@@ -123,7 +197,28 @@ if (IS_DEMO_MODE) {
       const maintApproveMatch = path.match(/\/asset-maintenances\/(\d+)\/approve/);
       const maintRejectMatch = path.match(/\/asset-maintenances\/(\d+)\/reject/);
       if (method === 'post' && maintApproveMatch) { const m = fakeMaint.find(x => x.id === Number(maintApproveMatch[1])); if (m) m.status = 'approved'; return { data: { message: 'Approved' }, status: 200, statusText: 'OK', headers: {}, config, request: {} }; }
-      if (method === 'post' && maintRejectMatch) { const m = fakeMaint.find(x => x.id === Number(maintRejectMatch[1])); if (m) m.status = 'rejected'; return { data: { message: 'Rejected' }, status: 200, statusText: 'OK', headers: {}, config, request: {} }; }
+      if (method === 'post' && maintRejectMatch) { 
+        const m = fakeMaint.find(x => x.id === Number(maintRejectMatch[1])); 
+        if (m) {
+          m.status = 'rejected';
+          const payload = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {};
+          m.rejection_reason = payload.rejection_reason || 'No reason provided';
+        }
+        return { data: { message: 'Rejected' }, status: 200, statusText: 'OK', headers: {}, config, request: {} }; 
+      }
+
+      // PUT: asset maintenance update (status change / complete)
+      const maintUpdateMatch = path.match(/\/asset-maintenances\/(\d+)$/);
+      if (method === 'put' && maintUpdateMatch) {
+        const m = fakeMaint.find(x => x.id === Number(maintUpdateMatch[1]));
+        if (m) {
+          const payload = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {};
+          if (payload.status) m.status = payload.status;
+          if (payload.notes) m.notes = payload.notes;
+          if (payload.cost) m.cost = payload.cost;
+        }
+        return { data: m, status: 200, statusText: 'OK', headers: {}, config, request: {} };
+      }
 
       // Tickets list
       if (path.includes('/tickets')) return { data: { data: fakeTickets, meta: { current_page: 1, last_page: 1, total: fakeTickets.length }, open_count: fakeTickets.filter(t => t.status === 'open').length, in_progress_count: fakeTickets.filter(t => t.status === 'in_progress').length, closed_count: fakeTickets.filter(t => t.status === 'closed').length }, status: 200, statusText: 'OK', headers: {}, config, request: {} };

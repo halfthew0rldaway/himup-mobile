@@ -23,12 +23,22 @@ export interface Permission {
   slug: string;
 }
 
+export interface TicketHold {
+  id: number;
+  ticket_id: number;
+  held_by_user_id: number;
+  started_at: string;
+  ended_at: string | null;
+  reason?: string;
+  held_by_user?: { id: number; name: string };
+}
+
 export interface Ticket {
   id: number;
   ticket_number: string;
   title: string;
   description: string;
-  status: 'open' | 'in_progress' | 'resolved' | 'closed' | 'on_hold';
+  status: 'open' | 'in_progress' | 'resolved' | 'closed' | 'hold';
   priority: 'low' | 'medium' | 'high' | 'critical';
   created_at: string;
   updated_at: string;
@@ -38,6 +48,8 @@ export interface Ticket {
   branch?: { id: number; name: string };
   comments?: Comment[];
   attachments?: Attachment[];
+  holds?: TicketHold[];
+  active_hold?: TicketHold | null;
 }
 
 export interface Asset {

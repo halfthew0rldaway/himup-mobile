@@ -6,6 +6,7 @@ import { ticketService } from '@/services';
 import { formatDistanceToNow } from 'date-fns';
 import type { Ticket as TicketType } from '@/types';
 import { W, stickyHeader } from '@/lib/design';
+import { PullToRefresh } from '@/components/PullToRefresh';
 
 const priorityBar = (p: string) => ({ critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e' }[p] || '#9ca3af');
 const priorityBadge = (p: string) => ({
@@ -14,7 +15,7 @@ const priorityBadge = (p: string) => ({
 }[p] || 'bg-gray-100 text-gray-700');
 const statusBadge = (s: string) => ({
   open: 'bg-orange-100 text-orange-700', in_progress: 'bg-blue-100 text-blue-700',
-  closed: 'bg-gray-100 text-gray-600', on_hold: 'bg-yellow-100 text-yellow-700',
+  closed: 'bg-gray-100 text-gray-600', hold: 'bg-yellow-100 text-yellow-700',
 }[s] || 'bg-gray-100 text-gray-700');
 
 // badge style from Tailwind class name (inline style equivalent)
@@ -29,7 +30,7 @@ const STATUS_INLINE: Record<string, { background: string; color: string }> = {
   in_progress: { background: '#eff6ff', color: '#1d4ed8' },
   resolved:    { background: '#f0fdf4', color: '#15803d' },
   closed:      { background: '#f3f4f6', color: '#374151' },
-  on_hold:     { background: '#fefce8', color: '#a16207' },
+  hold:        { background: '#fefce8', color: '#a16207' },
 };
 
 export const TicketsPage: React.FC = () => {
@@ -42,7 +43,7 @@ export const TicketsPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [filterOpen, setFilterOpen] = useState(false);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch: refetchList } = useQuery({
     queryKey: ['tickets', tab, search, status, priority, page],
     queryFn: () => tab === 'my'
       ? ticketService.getMy({ search, status, priority, page, per_page: 10 })
@@ -50,14 +51,26 @@ export const TicketsPage: React.FC = () => {
     refetchInterval: 30000,
   });
 
+  const { data: statsData, refetch: refetchStats } = useQuery({
+    queryKey: ['tickets-stats', tab, search, priority],
+    queryFn: () => tab === 'my'
+      ? ticketService.getMy({ search, priority, per_page: 500 })
+      : ticketService.getAll({ search, priority, per_page: 500 }),
+    refetchInterval: 30000,
+  });
+
+  const handleRefresh = async () => {
+    await Promise.all([refetchList(), refetchStats()]);
+  };
+
   const tickets: TicketType[] = data?.data || [];
   const meta = data?.meta;
   const stats = {
-    total: meta?.total || 0,
-    open: (data as any)?.open_count ?? 0,
-    in_progress: (data as any)?.in_progress_count ?? 0,
-    resolved: (data as any)?.resolved_count ?? 0,
-    closed: (data as any)?.closed_count ?? 0,
+    total: statsData?.meta?.total || 0,
+    open: statsData?.data?.filter((t: any) => t.status === 'open').length || 0,
+    in_progress: statsData?.data?.filter((t: any) => t.status === 'in_progress').length || 0,
+    resolved: statsData?.data?.filter((t: any) => t.status === 'resolved').length || 0,
+    closed: statsData?.data?.filter((t: any) => t.status === 'closed').length || 0,
   };
   const hasFilters = !!(search || status || priority);
 
@@ -65,8 +78,9 @@ export const TicketsPage: React.FC = () => {
 
   return (
     <>
-      <div style={{ minHeight: '100%', background: W.gray50 }} className="page-enter">
-        {/* Header */}
+    <PullToRefresh onRefresh={handleRefresh}>
+      <div style={{ minHeight: '100%', background: W.gray50, paddingBottom: 80 }} className="page-enter">
+        {/* Sticky Header */}
       <div style={{ ...stickyHeader }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -102,7 +116,6 @@ export const TicketsPage: React.FC = () => {
             { label: 'Total', val: stats.total, active: !status, onClick: () => { setStatus(''); setPage(1); }, activeBg: '#111827', activeText: '#fff', inactiveBg: '#fff', inactiveText: W.gray900 },
             { label: 'Open', val: stats.open, active: status === 'open', onClick: () => { setStatus(status === 'open' ? '' : 'open'); setPage(1); }, activeBg: W.orange500, activeText: '#fff', inactiveBg: '#fff7ed', inactiveText: W.orange700 },
             { label: 'In Prog.', val: stats.in_progress, active: status === 'in_progress', onClick: () => { setStatus(status === 'in_progress' ? '' : 'in_progress'); setPage(1); }, activeBg: '#2563eb', activeText: '#fff', inactiveBg: '#eff6ff', inactiveText: '#1d4ed8' },
-            { label: 'Resolved', val: stats.resolved, active: status === 'resolved', onClick: () => { setStatus(status === 'resolved' ? '' : 'resolved'); setPage(1); }, activeBg: '#16a34a', activeText: '#fff', inactiveBg: '#f0fdf4', inactiveText: '#15803d' },
             { label: 'Closed', val: stats.closed, active: status === 'closed', onClick: () => { setStatus(status === 'closed' ? '' : 'closed'); setPage(1); }, activeBg: '#4b5563', activeText: '#fff', inactiveBg: W.gray50, inactiveText: W.gray700 },
           ].map(({ label, val, active, onClick, activeBg, activeText, inactiveBg, inactiveText }) => (
             <button key={label} onClick={onClick} style={{ flex: '1 1 calc(25% - 5px)', minWidth: 70, padding: '8px 4px', borderRadius: 10, border: '1px solid', borderColor: active ? activeBg : W.gray100b, background: active ? activeBg : inactiveBg, textAlign: 'center', cursor: 'pointer', transition: 'all 0.15s' }}>
@@ -138,9 +151,7 @@ export const TicketsPage: React.FC = () => {
                   <option value="">All</option>
                   <option value="open">🟠 Open</option>
                   <option value="in_progress">🔵 In Progress</option>
-                  <option value="resolved">🟢 Resolved</option>
                   <option value="closed">⚫ Closed</option>
-                  <option value="on_hold">🟡 On Hold</option>
                 </select>
               </div>
               <div>
@@ -239,6 +250,7 @@ export const TicketsPage: React.FC = () => {
         )}
       </div>
     </div>
+    </PullToRefresh>
 
     {/* FAB for On-site reporting */}
     <button onClick={() => navigate('/tickets/create')} className="press"

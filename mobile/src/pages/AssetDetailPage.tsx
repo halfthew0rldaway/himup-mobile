@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Package, Calendar, DollarSign, FileText, MapPin, Hash, Loader2, Wrench, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
@@ -26,6 +26,7 @@ const getIconBg = (s: string) => ({ active: '#f0fdf4', maintenance: '#fffbeb', d
 export const AssetDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [maintenanceModalOpen, setMaintenanceModalOpen] = useState(false);
 
   const { data: asset, isLoading } = useQuery<Asset>({
     queryKey: ['asset', id],
@@ -119,10 +120,25 @@ export const AssetDetailPage: React.FC = () => {
 
         {/* CTAs */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <button onClick={() => navigate(`/maintenance/create?asset_id=${asset.id}`)} className="press"
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, background: '#fff', border: `1px solid ${W.gray100b}`, borderRadius: 12, padding: 14, cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-            <Wrench size={20} color="#b45309" />
-            <span style={{ fontSize: 13, fontWeight: 600, color: W.gray900 }}>Maintenance</span>
+          <button 
+            onClick={() => {
+              if (asset.status === 'maintenance') {
+                setMaintenanceModalOpen(true);
+                return;
+              }
+              navigate(`/maintenance/create?asset_id=${asset.id}`);
+            }} 
+            className={asset.status === 'maintenance' ? '' : 'press'}
+            style={{ 
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, 
+              background: asset.status === 'maintenance' ? W.gray50 : '#fff', 
+              border: `1px solid ${W.gray100b}`, borderRadius: 12, padding: 14, 
+              cursor: asset.status === 'maintenance' ? 'not-allowed' : 'pointer', 
+              boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+              opacity: asset.status === 'maintenance' ? 0.6 : 1
+            }}>
+            <Wrench size={20} color={asset.status === 'maintenance' ? W.gray400 : "#b45309"} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: asset.status === 'maintenance' ? W.gray500 : W.gray900 }}>Maintenance</span>
           </button>
           
           <button onClick={() => navigate(`/tickets/create?asset_id=${asset.id}`)} className="press"
@@ -132,6 +148,24 @@ export const AssetDetailPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Asset in Maintenance Modal */}
+      {maintenanceModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+          <div className="page-enter" style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 340, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', overflow: 'hidden', padding: 20, textAlign: 'center' }}>
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <AlertCircle size={28} color="#dc2626" />
+            </div>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: W.gray900, marginBottom: 8 }}>Asset Sedang Maintenance</h3>
+            <p style={{ fontSize: 14, color: W.gray600, marginBottom: 24, lineHeight: 1.5 }}>
+              Asset <b>{asset.name}</b> saat ini sedang dalam proses maintenance dan tidak dapat diajukan perbaikan baru sampai perbaikan sebelumnya selesai.
+            </p>
+            <button onClick={() => setMaintenanceModalOpen(false)} className="press" style={{ width: '100%', padding: '12px', background: W.gray900, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 600, fontSize: 15, cursor: 'pointer' }}>
+              Mengerti
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
