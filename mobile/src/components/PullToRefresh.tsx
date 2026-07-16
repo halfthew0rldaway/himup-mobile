@@ -87,7 +87,7 @@ export const PullToRefresh: React.FC<{ onRefresh: () => Promise<void>; children:
           transform: `translateY(${offset - 60}px)`,
           transition: pulling ? 'none' : 'transform 0.3s, opacity 0.3s',
           color: W.gray500,
-          zIndex: 10
+          zIndex: 5
         }}
       >
         {refreshing ? (

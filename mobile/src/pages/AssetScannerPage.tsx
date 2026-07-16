@@ -140,8 +140,8 @@ export const AssetScannerPage: React.FC = () => {
                   <p style={{ fontSize: 13, color: '#fff', flex: 1 }}>{error}</p>
                   <button onClick={() => {
                     setError('');
-                    // Optionally restart scanning here if needed
-                  }} style={{ background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}><X size={14} color="#fff" /></button>
+                    window.location.reload(); // Quick fix to restart scanner
+                  }} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', cursor: 'pointer', flexShrink: 0, padding: '6px 12px', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600 }}>Coba Lagi</button>
                 </div>
               )}
             </div>

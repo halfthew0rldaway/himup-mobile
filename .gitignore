@@ -40,11 +40,11 @@ Thumbs.db
 .codex
 test_api.*
 build_error.txt
-*.apk
 *.idsig
 
 # Unrelated project docs / presentations
 PRESENTASI/
+presentasi-capstone-main-final/
 *.txt
 *.png
 *.jpeg

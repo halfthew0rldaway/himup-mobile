@@ -7,7 +7,7 @@ import { W, stickyHeader, primaryBtn } from '@/lib/design';
 
 const inputStyle: React.CSSProperties = {
   width: '100%', background: W.gray50, border: `1px solid ${W.gray200b}`,
-  borderRadius: 8, padding: '10px 12px', fontSize: 14, color: W.gray900, outline: 'none',
+  borderRadius: 8, padding: '12px 14px', fontSize: 14, color: W.gray900, outline: 'none', minHeight: 44,
 };
 const labelStyle: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 500, color: W.gray700, marginBottom: 6 };
 
@@ -119,6 +119,7 @@ export const TicketCreatePage: React.FC = () => {
               </div>
             ) : (
               <>
+                {/* NOTE: Native <select> is used here. For large datasets (>50 items), this should be upgraded to a searchable autocomplete dropdown component to improve mobile UX. */}
                 <div>
                   <label style={labelStyle}>Branch *</label>
                   <select value={branchId} onChange={(e) => setBranchId(e.target.value)} required style={inputStyle}>

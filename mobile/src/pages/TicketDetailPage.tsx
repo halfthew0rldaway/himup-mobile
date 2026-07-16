@@ -7,6 +7,10 @@ import { useAuthStore } from '@/store/auth.store';
 import { format, formatDistanceStrict } from 'date-fns';
 import type { Ticket } from '@/types';
 import { W, stickyHeader, sectionLabel } from '@/lib/design';
+import Lottie from 'lottie-react';
+import successAnimation from '@/assets/lottie/success.json';
+
+const SafeLottie = (Lottie as any).default || Lottie;
 
 const STORAGE_URL = 'https://api.himup.id/storage/';
 
@@ -65,6 +69,16 @@ export const TicketDetailPage: React.FC = () => {
   const [resolutionModalOpen, setResolutionModalOpen] = useState(false);
   const [resolutionText, setResolutionText] = useState('');
 
+  // Lock body scroll when modals are open
+  useEffect(() => {
+    if (holdModalOpen || resolutionModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [holdModalOpen, resolutionModalOpen]);
+
   const { data: ticket, isLoading } = useQuery<Ticket>({
     queryKey: ['ticket', id],
     queryFn: () => ticketService.getOne(Number(id)),
@@ -91,6 +105,8 @@ export const TicketDetailPage: React.FC = () => {
           holdMs += Date.now() - new Date(activeHold.started_at).getTime();
         }
       }
+      // NOTE: SLA calculation uses client Date.now(). For full security against client time spoofing, 
+      // this requires the backend API to provide a 'server_time' in the response to calculate a reliable offset.
       const rawElapsed = Date.now() - new Date(ticket.created_at).getTime();
       setElapsed(Math.max(0, rawElapsed - holdMs));
     };
@@ -266,7 +282,7 @@ export const TicketDetailPage: React.FC = () => {
             const resolvePercent = slaLimit ? Math.min((resolveMs / slaLimit) * 100, 100) : 0;
             const breached = resolveMs > slaLimit;
             return (
-              <div style={{ marginBottom: 12 }}>
+              <div style={{ marginBottom: 12, position: 'relative', overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <CheckCircle size={13} color={breached ? '#dc2626' : '#16a34a'} />
@@ -278,12 +294,13 @@ export const TicketDetailPage: React.FC = () => {
                     {formatMs(resolveMs)}
                   </span>
                 </div>
-                <div style={{ height: 6, background: W.gray100, borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{ height: 6, background: W.gray100, borderRadius: 99, overflow: 'hidden', position: 'relative', zIndex: 2 }}>
                   <div style={{ height: '100%', borderRadius: 99, width: `${resolvePercent}%`, background: breached ? '#dc2626' : resolvePercent > 80 ? '#f97316' : '#16a34a' }} />
                 </div>
-                <p style={{ fontSize: 11, color: W.gray400, marginTop: 4 }}>
+                <p style={{ fontSize: 11, color: W.gray400, marginTop: 4, position: 'relative', zIndex: 2 }}>
                   Batas SLA: {formatDistanceStrict(0, slaLimit)} · Diselesaikan: {closedAt ? format(new Date(closedAt), 'dd MMM yyyy · HH:mm') : '-'}
                 </p>
+
               </div>
             );
           })()}
@@ -317,11 +334,11 @@ export const TicketDetailPage: React.FC = () => {
               <div>
                 {user?.role && ['super-admin', 'manager'].includes(user.role.slug) ? (
                   <button onClick={() => resumeMutation.mutate()} disabled={resumeMutation.isPending} className="press"
-                    style={{ width: '100%', padding: '11px', background: '#2563eb', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 12px rgba(37,99,235,0.3)', opacity: resumeMutation.isPending ? 0.7 : 1 }}>
+                    style={{ width: '100%', padding: '14px', background: '#2563eb', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 12px rgba(37,99,235,0.3)', opacity: resumeMutation.isPending ? 0.7 : 1 }}>
                     {resumeMutation.isPending ? <><Loader2 size={15} className="spin" /> Melanjutkan…</> : <><Play size={15} /> Lanjutkan Tiket</>}
                   </button>
                 ) : (
-                  <div style={{ padding: '10px 12px', background: '#fefce8', border: '1px solid #fef3c7', borderRadius: 8, fontSize: 13, color: '#a16207', textAlign: 'center', fontWeight: 500 }}>
+                  <div style={{ padding: '12px 14px', background: '#fefce8', border: '1px solid #fef3c7', borderRadius: 8, fontSize: 13, color: '#a16207', textAlign: 'center', fontWeight: 500 }}>
                     Tiket sedang ditangguhkan. Hanya Admin/Manager yang dapat melanjutkan.
                   </div>
                 )}
@@ -520,16 +537,16 @@ export const TicketDetailPage: React.FC = () => {
 
           {ticket.status !== 'closed' && (
             <div style={{ display: 'flex', gap: 8, marginTop: 8, paddingTop: 10, borderTop: `1px solid ${W.gray100b}` }}>
-              <input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Tulis komentar…"
-                style={{ flex: 1, background: W.gray50, border: `1px solid ${W.gray200b}`, borderRadius: 8, padding: '9px 12px', fontSize: 13, color: W.gray900, outline: 'none' }}
+              <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Tulis komentar…" rows={1}
+                style={{ flex: 1, background: W.gray50, border: `1px solid ${W.gray200b}`, borderRadius: 8, padding: '12px', fontSize: 13, color: W.gray900, outline: 'none', resize: 'vertical', minHeight: '44px' }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && comment.trim()) { e.preventDefault(); commentMutation.mutate(comment.trim()); } }} />
-              <label style={{ width: 36, height: 36, background: W.gray100, border: `1px solid ${W.gray200b}`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
-                <Paperclip size={15} color={W.gray500} />
+              <label style={{ width: 44, height: 44, background: W.gray100, border: `1px solid ${W.gray200b}`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+                <Paperclip size={18} color={W.gray500} />
                 <input type="file" style={{ display: 'none' }} onChange={handleAttachment} />
               </label>
               <button onClick={() => { if (comment.trim()) commentMutation.mutate(comment.trim()); }} disabled={!comment.trim() || commentMutation.isPending}
-                style={{ width: 36, height: 36, background: comment.trim() ? W.orange500 : W.gray100, border: 'none', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
-                {commentMutation.isPending ? <Loader2 size={14} color="#fff" className="spin" /> : <Send size={14} color={comment.trim() ? '#fff' : W.gray400} />}
+                style={{ width: 44, height: 44, background: comment.trim() ? W.orange500 : W.gray100, border: 'none', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+                {commentMutation.isPending ? <Loader2 size={18} color="#fff" className="spin" /> : <Send size={18} color={comment.trim() ? '#fff' : W.gray400} />}
               </button>
             </div>
           )}
@@ -557,20 +574,20 @@ export const TicketDetailPage: React.FC = () => {
                 'Jadwal pemeliharaan berkala',
               ].map(preset => (
                 <button key={preset} type="button" onClick={() => setHoldReason(preset)}
-                  style={{ padding: '6px 12px', fontSize: 11, fontWeight: 500, background: holdReason === preset ? '#fff7ed' : W.gray50, border: `1px solid ${holdReason === preset ? W.orange500 : W.gray200b}`, borderRadius: 20, color: holdReason === preset ? W.orange600 : W.gray600, cursor: 'pointer', transition: 'all 0.12s' }}>
+                  style={{ padding: '10px 14px', fontSize: 13, fontWeight: 500, background: holdReason === preset ? '#fff7ed' : W.gray50, border: `1px solid ${holdReason === preset ? W.orange500 : W.gray200b}`, borderRadius: 20, color: holdReason === preset ? W.orange600 : W.gray600, cursor: 'pointer', transition: 'all 0.12s', minHeight: 44 }}>
                   {preset}
                 </button>
               ))}
             </div>
 
             <textarea value={holdReason} onChange={(e) => setHoldReason(e.target.value)} rows={3} placeholder="Tulis alasan penangguhan tambahan secara detail..."
-              style={{ width: '100%', background: W.gray50, border: `1px solid ${W.gray200b}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: W.gray900, outline: 'none', resize: 'none' }} />
+              style={{ width: '100%', background: W.gray50, border: `1px solid ${W.gray200b}`, borderRadius: 8, padding: '12px 14px', fontSize: 13, color: W.gray900, outline: 'none', resize: 'none' }} />
             
             <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-              <button onClick={() => setHoldModalOpen(false)} style={{ flex: 1, padding: '10px', background: W.gray100, border: 'none', borderRadius: 8, color: W.gray700, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Batal</button>
+              <button onClick={() => setHoldModalOpen(false)} style={{ flex: 1, padding: '12px', background: W.gray100, border: 'none', borderRadius: 8, color: W.gray700, fontWeight: 600, fontSize: 14, cursor: 'pointer', minHeight: 44 }}>Batal</button>
               <button onClick={() => holdMutation.mutate(holdReason)} disabled={!holdReason.trim() || holdMutation.isPending}
-                style={{ flex: 1, padding: '10px', background: '#eab308', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: !holdReason.trim() || holdMutation.isPending ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                {holdMutation.isPending ? <Loader2 size={14} className="spin" /> : null} Simpan
+                style={{ flex: 1, padding: '12px', background: '#eab308', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer', opacity: !holdReason.trim() || holdMutation.isPending ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44 }}>
+                {holdMutation.isPending ? <Loader2 size={16} className="spin" /> : null} Simpan
               </button>
             </div>
           </div>
@@ -590,13 +607,13 @@ export const TicketDetailPage: React.FC = () => {
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: W.gray700, marginBottom: 8 }}>Detail Penyelesaian / Solusi *</label>
             
             <textarea value={resolutionText} onChange={(e) => setResolutionText(e.target.value)} rows={4} placeholder="Tuliskan tindakan/solusi penanganan masalah..."
-              style={{ width: '100%', background: W.gray50, border: `1px solid ${W.gray200b}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: W.gray900, outline: 'none', resize: 'none' }} />
+              style={{ width: '100%', background: W.gray50, border: `1px solid ${W.gray200b}`, borderRadius: 8, padding: '12px 14px', fontSize: 13, color: W.gray900, outline: 'none', resize: 'none' }} />
             
             <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-              <button onClick={() => setResolutionModalOpen(false)} style={{ flex: 1, padding: '10px', background: W.gray100, border: 'none', borderRadius: 8, color: W.gray700, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Batal</button>
+              <button onClick={() => setResolutionModalOpen(false)} style={{ flex: 1, padding: '12px', background: W.gray100, border: 'none', borderRadius: 8, color: W.gray700, fontWeight: 600, fontSize: 14, cursor: 'pointer', minHeight: 44 }}>Batal</button>
               <button onClick={() => statusMutation.mutate({ status: 'resolved', resolution: resolutionText })} disabled={!resolutionText.trim() || statusMutation.isPending}
-                style={{ flex: 1, padding: '10px', background: '#16a34a', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: !resolutionText.trim() || statusMutation.isPending ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                {statusMutation.isPending ? <Loader2 size={14} className="spin" /> : null} Selesai
+                style={{ flex: 1, padding: '12px', background: '#16a34a', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer', opacity: !resolutionText.trim() || statusMutation.isPending ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44 }}>
+                {statusMutation.isPending ? <Loader2 size={16} className="spin" /> : null} Selesai
               </button>
             </div>
           </div>

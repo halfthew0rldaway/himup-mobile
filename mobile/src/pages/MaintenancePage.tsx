@@ -128,22 +128,26 @@ export const MaintenancePage: React.FC = () => {
           )}
         </div>
 
-        {meta && meta.last_page > 1 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-            <button onClick={() => setPage(p => p - 1)} disabled={page === 1} style={{ padding: '8px 16px', background: '#fff', border: `1px solid ${W.gray200b}`, borderRadius: 8, fontSize: 13, color: page === 1 ? W.gray400 : W.gray700, cursor: page === 1 ? 'default' : 'pointer' }}>← Prev</button>
-            <span style={{ fontSize: 12, color: W.gray500 }}>Page {page} of {meta.last_page}</span>
-            <button onClick={() => setPage(p => p + 1)} disabled={page === meta.last_page} style={{ padding: '8px 16px', background: '#fff', border: `1px solid ${W.gray200b}`, borderRadius: 8, fontSize: 13, color: page === meta.last_page ? W.gray400 : W.gray700, cursor: page === meta.last_page ? 'default' : 'pointer' }}>Next →</button>
-          </div>
-        )}
       </div>
       </div>
       
-      {/* FAB */}
-      <button onClick={() => navigate('/maintenance/create')} className="press"
-        style={{ position: 'fixed', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)', right: 20, width: 56, height: 56, background: 'linear-gradient(135deg,#f97316,#ef4444)', border: 'none', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 24px rgba(249,115,22,0.4)', cursor: 'pointer', zIndex: 100 }}>
-        <Plus size={24} color="#fff" />
-      </button>
     </PullToRefresh>
+    {/* Fixed Pagination */}
+    {meta && meta.last_page > 1 && (
+      <div style={{ position: 'fixed', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 57px)', left: 0, right: 0, padding: '12px 16px', background: W.gray50, borderTop: `1px solid ${W.gray200b}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 90, boxShadow: '0 -4px 12px rgba(0,0,0,0.05)' }}>
+        <button onClick={() => setPage(p => p - 1)} disabled={page === 1}
+          style={{ minHeight: 44, padding: '10px 16px', background: '#fff', border: `1px solid ${W.gray200b}`, borderRadius: 8, fontSize: 13, color: page === 1 ? W.gray400 : W.gray700, cursor: page === 1 ? 'default' : 'pointer' }}>← Prev</button>
+        <span style={{ fontSize: 12, color: W.gray500 }}>Page {page} of {meta.last_page}</span>
+        <button onClick={() => setPage(p => p + 1)} disabled={page === meta.last_page}
+          style={{ minHeight: 44, padding: '10px 16px', background: '#fff', border: `1px solid ${W.gray200b}`, borderRadius: 8, fontSize: 13, color: page === meta.last_page ? W.gray400 : W.gray700, cursor: page === meta.last_page ? 'default' : 'pointer' }}>Next →</button>
+      </div>
+    )}
+
+    {/* FAB */}
+    <button onClick={() => navigate('/maintenance/create')} className="press"
+      style={{ position: 'fixed', bottom: meta && meta.last_page > 1 ? 'calc(env(safe-area-inset-bottom, 0px) + 142px)' : 'calc(env(safe-area-inset-bottom, 0px) + 80px)', right: 20, width: 56, height: 56, background: 'linear-gradient(135deg,#f97316,#ef4444)', border: 'none', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 24px rgba(249,115,22,0.4)', cursor: 'pointer', zIndex: 100, transition: 'bottom 0.2s' }}>
+      <Plus size={24} color="#fff" />
+    </button>
     </>
   );
 };

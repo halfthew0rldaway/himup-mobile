@@ -46,7 +46,7 @@ export const AssetsPage: React.FC = () => {
   const meta = data?.meta;
 
   return (
-    <div style={{ minHeight: '100%', background: W.gray50 }} className="page-enter">
+    <div style={{ minHeight: '100%', background: W.gray50, paddingBottom: 80 }} className="page-enter">
       {/* Header */}
       <div style={{ ...stickyHeader }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -120,16 +120,18 @@ export const AssetsPage: React.FC = () => {
           )}
         </div>
 
-        {meta && meta.last_page > 1 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-            <button onClick={() => setPage(p => p - 1)} disabled={page === 1}
-              style={{ padding: '8px 16px', background: '#fff', border: `1px solid ${W.gray200b}`, borderRadius: 8, fontSize: 13, color: page === 1 ? W.gray400 : W.gray700, cursor: page === 1 ? 'default' : 'pointer' }}>← Prev</button>
-            <span style={{ fontSize: 12, color: W.gray500 }}>Page {page} of {meta.last_page}</span>
-            <button onClick={() => setPage(p => p + 1)} disabled={page === meta.last_page}
-              style={{ padding: '8px 16px', background: '#fff', border: `1px solid ${W.gray200b}`, borderRadius: 8, fontSize: 13, color: page === meta.last_page ? W.gray400 : W.gray700, cursor: page === meta.last_page ? 'default' : 'pointer' }}>Next →</button>
-          </div>
-        )}
       </div>
+
+      {/* Fixed Pagination */}
+      {meta && meta.last_page > 1 && (
+        <div style={{ position: 'fixed', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 57px)', left: 0, right: 0, padding: '12px 16px', background: W.gray50, borderTop: `1px solid ${W.gray200b}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 90, boxShadow: '0 -4px 12px rgba(0,0,0,0.05)' }}>
+          <button onClick={() => setPage(p => p - 1)} disabled={page === 1}
+            style={{ minHeight: 44, padding: '10px 16px', background: '#fff', border: `1px solid ${W.gray200b}`, borderRadius: 8, fontSize: 13, color: page === 1 ? W.gray400 : W.gray700, cursor: page === 1 ? 'default' : 'pointer' }}>← Prev</button>
+          <span style={{ fontSize: 12, color: W.gray500 }}>Page {page} of {meta.last_page}</span>
+          <button onClick={() => setPage(p => p + 1)} disabled={page === meta.last_page}
+            style={{ minHeight: 44, padding: '10px 16px', background: '#fff', border: `1px solid ${W.gray200b}`, borderRadius: 8, fontSize: 13, color: page === meta.last_page ? W.gray400 : W.gray700, cursor: page === meta.last_page ? 'default' : 'pointer' }}>Next →</button>
+        </div>
+      )}
     </div>
   );
 };

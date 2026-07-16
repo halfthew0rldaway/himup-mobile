@@ -5,8 +5,7 @@ import { Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
 import { authService } from '@/services';
 import { useAuthStore, isAllowedRole } from '@/store/auth.store';
 import { W, primaryBtn } from '@/lib/design';
-import logoSrc from '@/assets/logo.png';
-
+import logoSrc from '@/assets/iconhimup.png';
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -15,7 +14,6 @@ export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
   const [roleError, setRoleError] = useState(false);
 
   const from = (location.state as any)?.from?.pathname || '/tickets';
@@ -48,12 +46,10 @@ export const LoginPage: React.FC = () => {
     }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
 
-        {/* Logo + title */}
+        {/* Logo + title with Lottie */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{ width: 100, height: 100, margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <img src={logoSrc} alt="HiMup Logo"
-              style={{ width: 100, height: 100, objectFit: 'contain' }}
-            />
+          <div style={{ width: 140, height: 140, margin: '0 auto 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img src={logoSrc} alt="HiMup Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
           <h1 style={{ fontSize: 26, fontWeight: 700, color: W.gray900, marginBottom: 4 }}>HiMup</h1>
           <p style={{ fontSize: 13, color: W.gray600 }}>Asset Maintenance Tracking System</p>
@@ -78,7 +74,7 @@ export const LoginPage: React.FC = () => {
                 type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                 required autoComplete="email" placeholder="your@email.com"
                 onFocus={borderFocus} onBlur={borderBlur}
-                style={{ width: '100%', background: W.gray50, border: `1px solid ${W.gray200b}`, borderRadius: 8, padding: '11px 14px', fontSize: 14, color: W.gray900, outline: 'none', transition: 'border-color 0.15s' }}
+                style={{ width: '100%', background: W.gray50, border: `1px solid ${W.gray200b}`, borderRadius: 8, padding: '12px 14px', fontSize: 14, color: W.gray900, outline: 'none', transition: 'border-color 0.15s', minHeight: 44 }}
               />
             </div>
 
@@ -91,28 +87,16 @@ export const LoginPage: React.FC = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   required autoComplete="current-password" placeholder="••••••••"
                   onFocus={borderFocus} onBlur={borderBlur}
-                  style={{ width: '100%', background: W.gray50, border: `1px solid ${W.gray200b}`, borderRadius: 8, padding: '11px 44px 11px 14px', fontSize: 14, color: W.gray900, outline: 'none', transition: 'border-color 0.15s' }}
+                  style={{ width: '100%', background: W.gray50, border: `1px solid ${W.gray200b}`, borderRadius: 8, padding: '12px 44px 12px 14px', fontSize: 14, color: W.gray900, outline: 'none', transition: 'border-color 0.15s', minHeight: 44 }}
                 />
                 <button type="button" onClick={() => setShowPass(!showPass)}
-                  style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: W.gray400, padding: 4 }}>
+                  style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: W.gray400, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 44, minWidth: 44 }}>
                   {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
-            {/* Remember Me */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: -4 }}>
-              <input
-                type="checkbox"
-                id="remember"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                style={{ width: 16, height: 16, accentColor: '#f97316', cursor: 'pointer' }}
-              />
-              <label htmlFor="remember" style={{ fontSize: 13, color: W.gray600, cursor: 'pointer', userSelect: 'none' }}>
-                Remember me
-              </label>
-            </div>
+
 
             {/* Submit */}
             <button type="submit" disabled={mutation.isPending} className="press"

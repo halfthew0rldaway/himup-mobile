@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Ticket, Search, X, Filter, Clock, Tag, User, Building, MessageSquare, ChevronUp, ChevronDown, Plus } from 'lucide-react';
@@ -37,25 +37,34 @@ export const TicketsPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [status, setStatus] = useState('');
   const [priority, setPriority] = useState('');
   const [tab, setTab] = useState<'my' | 'all'>('my');
   const [page, setPage] = useState(1);
   const [filterOpen, setFilterOpen] = useState(false);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1); // Reset page on new search
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const { data, isLoading, refetch: refetchList } = useQuery({
-    queryKey: ['tickets', tab, search, status, priority, page],
+    queryKey: ['tickets', tab, debouncedSearch, status, priority, page],
     queryFn: () => tab === 'my'
-      ? ticketService.getMy({ search, status, priority, page, per_page: 10 })
-      : ticketService.getAll({ search, status, priority, page, per_page: 10 }),
+      ? ticketService.getMy({ search: debouncedSearch, status, priority, page, per_page: 10 })
+      : ticketService.getAll({ search: debouncedSearch, status, priority, page, per_page: 10 }),
     refetchInterval: 30000,
   });
 
   const { data: statsData, refetch: refetchStats } = useQuery({
-    queryKey: ['tickets-stats', tab, search, priority],
+    queryKey: ['tickets-stats', tab, debouncedSearch, priority],
     queryFn: () => tab === 'my'
-      ? ticketService.getMy({ search, priority, per_page: 500 })
-      : ticketService.getAll({ search, priority, per_page: 500 }),
+      ? ticketService.getMy({ search: debouncedSearch, priority, per_page: 500 })
+      : ticketService.getAll({ search: debouncedSearch, priority, per_page: 500 }),
     refetchInterval: 30000,
   });
 
@@ -118,7 +127,7 @@ export const TicketsPage: React.FC = () => {
             { label: 'In Prog.', val: stats.in_progress, active: status === 'in_progress', onClick: () => { setStatus(status === 'in_progress' ? '' : 'in_progress'); setPage(1); }, activeBg: '#2563eb', activeText: '#fff', inactiveBg: '#eff6ff', inactiveText: '#1d4ed8' },
             { label: 'Closed', val: stats.closed, active: status === 'closed', onClick: () => { setStatus(status === 'closed' ? '' : 'closed'); setPage(1); }, activeBg: '#4b5563', activeText: '#fff', inactiveBg: W.gray50, inactiveText: W.gray700 },
           ].map(({ label, val, active, onClick, activeBg, activeText, inactiveBg, inactiveText }) => (
-            <button key={label} onClick={onClick} style={{ flex: '1 1 calc(25% - 5px)', minWidth: 70, padding: '8px 4px', borderRadius: 10, border: '1px solid', borderColor: active ? activeBg : W.gray100b, background: active ? activeBg : inactiveBg, textAlign: 'center', cursor: 'pointer', transition: 'all 0.15s' }}>
+            <button key={label} onClick={onClick} style={{ flex: '1 1 calc(25% - 5px)', minWidth: 70, minHeight: 44, padding: '10px 4px', borderRadius: 10, border: '1px solid', borderColor: active ? activeBg : W.gray100b, background: active ? activeBg : inactiveBg, textAlign: 'center', cursor: 'pointer', transition: 'all 0.15s' }}>
               <p style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.8)' : inactiveText, marginBottom: 2 }}>{label}</p>
               <p style={{ fontSize: 16, fontWeight: 700, color: active ? activeText : inactiveText }}>{val}</p>
             </button>
@@ -128,14 +137,14 @@ export const TicketsPage: React.FC = () => {
         {/* Search */}
         <div style={{ position: 'relative', marginBottom: 8 }}>
           <Search size={14} color={W.gray400} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
-          <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Search..."
-            style={{ width: '100%', background: '#fff', border: `1px solid ${W.gray200b}`, borderRadius: 10, padding: '9px 32px 9px 30px', fontSize: 13, color: W.gray900, outline: 'none' }} />
-          {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer' }}><X size={14} color={W.gray400} /></button>}
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..."
+            style={{ width: '100%', background: '#fff', border: `1px solid ${W.gray200b}`, borderRadius: 10, padding: '12px 32px 12px 30px', fontSize: 13, color: W.gray900, outline: 'none', minHeight: 44 }} />
+          {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', minWidth: 40, minHeight: 40, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} color={W.gray400} /></button>}
         </div>
 
         {/* Filter toggle */}
         <button onClick={() => setFilterOpen(!filterOpen)} className="press"
-          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', background: hasFilters ? W.orange500 : '#fff', border: `1px solid ${hasFilters ? W.orange500 : W.gray200b}`, borderRadius: 10, fontSize: 13, fontWeight: 500, color: hasFilters ? '#fff' : W.gray700, cursor: 'pointer' }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 44, padding: '10px 12px', background: hasFilters ? W.orange500 : '#fff', border: `1px solid ${hasFilters ? W.orange500 : W.gray200b}`, borderRadius: 10, fontSize: 13, fontWeight: 500, color: hasFilters ? '#fff' : W.gray700, cursor: 'pointer' }}>
           <Filter size={14} />
           Filter
           {filterOpen ? <ChevronUp size={14} style={{ marginLeft: 'auto' }} /> : <ChevronDown size={14} style={{ marginLeft: 'auto' }} />}
@@ -147,7 +156,7 @@ export const TicketsPage: React.FC = () => {
               <div>
                 <label style={{ fontSize: 11, fontWeight: 500, color: W.gray600, display: 'block', marginBottom: 4 }}>Status</label>
                 <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-                  style={{ width: '100%', padding: '8px', border: `1px solid ${W.gray200b}`, borderRadius: 8, fontSize: 13, background: '#fff', color: W.gray900, outline: 'none' }}>
+                  style={{ width: '100%', padding: '12px', border: `1px solid ${W.gray200b}`, borderRadius: 8, fontSize: 13, background: '#fff', color: W.gray900, outline: 'none', minHeight: 44 }}>
                   <option value="">All</option>
                   <option value="open">🟠 Open</option>
                   <option value="in_progress">🔵 In Progress</option>
@@ -157,7 +166,7 @@ export const TicketsPage: React.FC = () => {
               <div>
                 <label style={{ fontSize: 11, fontWeight: 500, color: W.gray600, display: 'block', marginBottom: 4 }}>Priority</label>
                 <select value={priority} onChange={(e) => { setPriority(e.target.value); setPage(1); }}
-                  style={{ width: '100%', padding: '8px', border: `1px solid ${W.gray200b}`, borderRadius: 8, fontSize: 13, background: '#fff', color: W.gray900, outline: 'none' }}>
+                  style={{ width: '100%', padding: '12px', border: `1px solid ${W.gray200b}`, borderRadius: 8, fontSize: 13, background: '#fff', color: W.gray900, outline: 'none', minHeight: 44 }}>
                   <option value="">All</option>
                   <option value="low">🟢 Low</option>
                   <option value="medium">🟡 Medium</option>
@@ -168,8 +177,8 @@ export const TicketsPage: React.FC = () => {
             </div>
             {hasFilters && (
               <button onClick={() => { setSearch(''); setStatus(''); setPriority(''); setPage(1); setFilterOpen(false); }}
-                style={{ fontSize: 12, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <X size={12} /> Clear filters
+                style={{ fontSize: 12, color: '#ef4444', minHeight: 44, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <X size={16} /> Clear filters
               </button>
             )}
           </div>
@@ -238,23 +247,24 @@ export const TicketsPage: React.FC = () => {
           )}
         </div>
 
-        {/* Pagination */}
-        {meta && meta.last_page > 1 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-            <button onClick={() => setPage(p => p - 1)} disabled={page === 1}
-              style={{ padding: '8px 16px', background: '#fff', border: `1px solid ${W.gray200b}`, borderRadius: 8, fontSize: 13, color: page === 1 ? W.gray400 : W.gray700, cursor: page === 1 ? 'default' : 'pointer' }}>← Prev</button>
-            <span style={{ fontSize: 12, color: W.gray500 }}>Page {page} of {meta.last_page}</span>
-            <button onClick={() => setPage(p => p + 1)} disabled={page === meta.last_page}
-              style={{ padding: '8px 16px', background: '#fff', border: `1px solid ${W.gray200b}`, borderRadius: 8, fontSize: 13, color: page === meta.last_page ? W.gray400 : W.gray700, cursor: page === meta.last_page ? 'default' : 'pointer' }}>Next →</button>
-          </div>
-        )}
       </div>
     </div>
     </PullToRefresh>
 
+    {/* Fixed Pagination */}
+    {meta && meta.last_page > 1 && (
+      <div style={{ position: 'fixed', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 57px)', left: 0, right: 0, padding: '12px 16px', background: W.gray50, borderTop: `1px solid ${W.gray200b}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 90, boxShadow: '0 -4px 12px rgba(0,0,0,0.05)' }}>
+        <button onClick={() => setPage(p => p - 1)} disabled={page === 1}
+          style={{ minHeight: 44, padding: '10px 16px', background: '#fff', border: `1px solid ${W.gray200b}`, borderRadius: 8, fontSize: 13, color: page === 1 ? W.gray400 : W.gray700, cursor: page === 1 ? 'default' : 'pointer' }}>← Prev</button>
+        <span style={{ fontSize: 12, color: W.gray500 }}>Page {page} of {meta.last_page}</span>
+        <button onClick={() => setPage(p => p + 1)} disabled={page === meta.last_page}
+          style={{ minHeight: 44, padding: '10px 16px', background: '#fff', border: `1px solid ${W.gray200b}`, borderRadius: 8, fontSize: 13, color: page === meta.last_page ? W.gray400 : W.gray700, cursor: page === meta.last_page ? 'default' : 'pointer' }}>Next →</button>
+      </div>
+    )}
+
     {/* FAB for On-site reporting */}
     <button onClick={() => navigate('/tickets/create')} className="press"
-      style={{ position: 'fixed', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)', right: 20, width: 56, height: 56, background: 'linear-gradient(135deg,#f97316,#ef4444)', border: 'none', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 24px rgba(249,115,22,0.4)', cursor: 'pointer', zIndex: 100 }}>
+      style={{ position: 'fixed', bottom: meta && meta.last_page > 1 ? 'calc(env(safe-area-inset-bottom, 0px) + 142px)' : 'calc(env(safe-area-inset-bottom, 0px) + 80px)', right: 20, width: 56, height: 56, background: 'linear-gradient(135deg,#f97316,#ef4444)', border: 'none', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 24px rgba(249,115,22,0.4)', cursor: 'pointer', zIndex: 100, transition: 'bottom 0.2s' }}>
       <Plus size={24} color="#fff" />
     </button>
     </>

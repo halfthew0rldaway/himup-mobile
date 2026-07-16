@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppShell } from '@/components/AppShell';
 import { LoginPage } from '@/pages/LoginPage';
@@ -25,7 +25,7 @@ const NoAccess: React.FC = () => (
     <p style={{ fontSize: 14, color: '#64748b', maxWidth: 300, lineHeight: 1.6, marginBottom: 24 }}>
       This app is for IT Operations Staff and Engineers only. Please use the web portal.
     </p>
-    <a href="/login" style={{ color: '#f97316', fontSize: 14, textDecoration: 'underline' }}>Back to Login</a>
+    <Link to="/login" style={{ color: '#f97316', fontSize: 14, textDecoration: 'underline' }}>Back to Login</Link>
   </div>
 );
 
